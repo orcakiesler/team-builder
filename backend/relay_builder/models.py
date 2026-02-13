@@ -18,6 +18,7 @@ class Person:
     last_name: str
     gender: Optional[str] = None
     year_of_birth: Optional[int] = None
+    age: Optional[int] = None  # always derived: current year − year_of_birth (not from file/DB)
 
     # Best 50m times in seconds (None if no time / empty cell)
     freestyle_50: Optional[float] = None

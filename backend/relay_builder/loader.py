@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from typing import List, Optional
 
@@ -268,12 +269,16 @@ def load_people(
             is_available = pd.notna(val) and val != "" and str(val).strip() != ""
             availability[col] = is_available
 
+        # Age from year of birth (current year at load time)
+        age = (date.today().year - yob) if yob is not None else None
+
         people.append(
             Person(
                 first_name=first,
                 last_name=last,
                 gender=gender,
                 year_of_birth=yob,
+                age=age,
                 freestyle_50=freestyle_50,
                 backstroke_50=backstroke_50,
                 breaststroke_50=breaststroke_50,
