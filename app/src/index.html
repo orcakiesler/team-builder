@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Relay Team Builder</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>Relay Team Builder</h1>
+    <p class="subtitle">Load your Excel files and build the fastest relay teams by age group.</p>
+  </header>
+
+  <section class="upload-section">
+    <div class="file-cards">
+      <div class="file-card" data-file="best_times" id="card-best-times">
+        <h3>Best times (50m)</h3>
+        <p class="file-name" id="name-best-times">Drop file or click to browse</p>
+        <input type="hidden" id="path-best-times" />
+      </div>
+      <div class="file-card" data-file="names_relays" id="card-names-relays">
+        <h3>Names &amp; relay availability</h3>
+        <p class="file-name" id="name-names-relays">Drop file or click to browse</p>
+        <input type="hidden" id="path-names-relays" />
+      </div>
+    </div>
+    <button type="button" class="run-btn" id="run-btn" disabled>Build teams</button>
+    <p class="run-hint" id="run-hint">Choose both files to enable.</p>
+  </section>
+
+  <section class="results-section hidden" id="results-section">
+    <div class="panels">
+      <div class="panel teams-panel">
+        <h2>Teams by event</h2>
+        <div class="teams-container" id="teams-container"></div>
+      </div>
+      <div class="panel swimmers-panel">
+        <h2>Swimmers</h2>
+        <div class="swimmers-list" id="swimmers-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="modal-overlay hidden" id="swimmer-modal-overlay">
+    <div class="modal" id="swimmer-modal">
+      <div class="modal-header">
+        <h3 id="modal-swimmer-name"></h3>
+        <button type="button" class="modal-close" id="modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <div class="loading hidden" id="loading">Building teams…</div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

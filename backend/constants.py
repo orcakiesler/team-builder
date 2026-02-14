@@ -41,6 +41,16 @@ AVAILABILITY_MEDLEY = "medley"
 AVAILABILITY_FREESTYLE_MIX = "freestyle_mix"
 AVAILABILITY_MEDLEY_MIX = "medley_mix"
 
+# Age groups for relay teams (sum of 4 swimmers' ages, inclusive)
+AGE_GROUPS = [
+    (100, 119),  # group1
+    (120, 159),  # group2
+    (160, 199),  # group3
+    (200, 239),  # group4
+    (240, 279),  # group5
+    (280, 319),  # group6
+]
+
 # Stroke column detection (best-times file)
 STROKE_COLUMN_ALIASES = {
     # attribute on Person -> list of possible column headers (normalized)

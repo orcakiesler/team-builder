@@ -41,5 +41,20 @@ people = load_people(
 )
 ```
 
-This will return a list of `Person` instances and (optionally) write everything into a SQLite database file. Later, this module will be exposed via an API for the Electron frontend.
+This will return a list of `Person` instances and (optionally) write everything into a SQLite database file.
+
+## API server (for Electron app)
+
+The Electron frontend talks to the backend over HTTP, not via `main.py`. From the backend folder:
+
+```bash
+poetry install   # includes fastapi, uvicorn
+poetry run uvicorn api_server:app --host 127.0.0.1 --port 8765
+```
+
+- **GET /health** – readiness check.
+- **POST /build-teams** – body: `{ "best_times_path": "...", "names_relays_path": "..." }`  
+  Returns `{ "reference_year", "swimmers", "teams" }` using `relay_builder` (load_people, event filters, build_teams) directly.
+
+When you run the Electron app (`npm start` from `app/`), it starts this API server automatically and calls it to build teams.
 

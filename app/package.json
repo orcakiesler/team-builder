@@ -1,0 +1,28 @@
+{
+  "name": "relay-team-builder",
+  "version": "0.1.0",
+  "description": "Build relay teams from Excel swimmer data",
+  "main": "main.js",
+  "scripts": {
+    "start": "npx electron .",
+    "start:backend": "cd ../backend && poetry run python -m uvicorn api_server:app --host 127.0.0.1 --port 8765",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.relayteambuilder.app",
+    "productName": "Relay Team Builder",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^40.4.1",
+    "electron-builder": "^26.7.0"
+  }
+}

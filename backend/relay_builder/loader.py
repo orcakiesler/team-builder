@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from typing import List, Optional
 
@@ -108,10 +109,6 @@ def load_people(
     best_df = _normalize_column_names(best_df)
     avail_df = _normalize_column_names(avail_df)
 
-    # Debug: print all columns to help diagnose missing yob column
-    print(f"DEBUG: best_times columns: {list(best_df.columns)}")
-    print(f"DEBUG: names_relays columns: {list(avail_df.columns)}")
-
     # Guess name / identity columns using shared constants
 
     def find_col(df, candidates):
@@ -130,8 +127,6 @@ def load_people(
     avail_last_name_col = find_col(avail_df, LAST_NAME_CANDIDATES)
     avail_yob_col = find_col(avail_df, YOB_CANDIDATES)
     avail_gender_col = find_col(avail_df, GENDER_CANDIDATES)
-
-    print(f"DEBUG: best_yob_col = {best_yob_col}, avail_yob_col = {avail_yob_col}")
 
     if not (best_full_name_col or (best_first_name_col and best_last_name_col)):
         raise ValueError(
@@ -268,12 +263,16 @@ def load_people(
             is_available = pd.notna(val) and val != "" and str(val).strip() != ""
             availability[col] = is_available
 
+        # Age from year of birth (current year at load time)
+        age = (date.today().year - yob) if yob is not None else None
+
         people.append(
             Person(
                 first_name=first,
                 last_name=last,
                 gender=gender,
                 year_of_birth=yob,
+                age=age,
                 freestyle_50=freestyle_50,
                 backstroke_50=backstroke_50,
                 breaststroke_50=breaststroke_50,
