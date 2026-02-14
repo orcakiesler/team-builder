@@ -4,31 +4,128 @@ const nameBestTimes = document.getElementById('name-best-times');
 const nameNamesRelays = document.getElementById('name-names-relays');
 const pathBestTimes = document.getElementById('path-best-times');
 const pathNamesRelays = document.getElementById('path-names-relays');
+const importBtn = document.getElementById('import-btn');
 const runBtn = document.getElementById('run-btn');
 const runHint = document.getElementById('run-hint');
 const resultsSection = document.getElementById('results-section');
 const teamsContainer = document.getElementById('teams-container');
 const swimmersList = document.getElementById('swimmers-list');
+const removeSelectedBtn = document.getElementById('remove-selected-btn');
 const loadingEl = document.getElementById('loading');
 const modalOverlay = document.getElementById('swimmer-modal-overlay');
 const modal = document.getElementById('swimmer-modal');
 const modalName = document.getElementById('modal-swimmer-name');
 const modalBody = document.getElementById('modal-body');
 const modalClose = document.getElementById('modal-close');
+const meetDropdownTrigger = document.getElementById('meet-dropdown-trigger');
+const meetDropdownPanel = document.getElementById('meet-dropdown-panel');
+const meetDropdownList = document.getElementById('meet-dropdown-list');
+const removeSelectedCompetitionsBtn = document.getElementById('remove-selected-competitions-btn');
+const selectModeBtn = document.getElementById('select-mode-btn');
+const selectAllSwimmersBtn = document.getElementById('select-all-swimmers-btn');
+const addCompetitionBtn = document.getElementById('add-competition-btn');
+const addCompetitionModal = document.getElementById('add-competition-modal-overlay');
+const addCompetitionClose = document.getElementById('add-competition-close');
+const addCompetitionForm = document.getElementById('add-competition-form');
+const addCompetitionCancel = document.getElementById('add-competition-cancel');
+const addCompetitionSave = document.getElementById('add-competition-save');
 
-let lastResult = null;
+const STORAGE_LAST_MEET = 'relay_last_meet_id';
+const STORAGE_LAST_TEAMS = 'relay_last_teams';
 
-function getPaths() {
-  const best = (pathBestTimes.value || '').trim();
-  const names = (pathNamesRelays.value || '').trim();
-  return { bestTimesPath: best || null, namesRelaysPath: names || null };
+let dbPath = null;
+let currentSwimmers = [];
+let currentCompetitions = [];
+let selectedMeetId = null;
+let lastTeamsResult = null;
+let swimmerSelectMode = false;
+
+function getLastMeetId() {
+  try {
+    const v = localStorage.getItem(STORAGE_LAST_MEET);
+    return v != null ? parseInt(v, 10) : null;
+  } catch (_) { return null; }
+}
+function setLastMeetId(id) {
+  try {
+    if (id != null) localStorage.setItem(STORAGE_LAST_MEET, String(id));
+    else localStorage.removeItem(STORAGE_LAST_MEET);
+  } catch (_) {}
+}
+function getLastTeamsByMeet() {
+  try {
+    const raw = localStorage.getItem(STORAGE_LAST_TEAMS);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) { return {}; }
+}
+function setLastTeamsForMeet(meetId, data) {
+  if (meetId == null) return;
+  const byMeet = getLastTeamsByMeet();
+  byMeet[meetId] = { teams: data.teams, swimmers: data.swimmers, reference_year: data.reference_year };
+  try {
+    localStorage.setItem(STORAGE_LAST_TEAMS, JSON.stringify(byMeet));
+  } catch (_) {}
+}
+async function applyLastTeamsForMeet(meetId) {
+  if (meetId == null) return;
+  const byMeet = getLastTeamsByMeet();
+  const saved = byMeet[meetId];
+  if (saved && saved.teams) {
+    lastTeamsResult = saved;
+    renderTeams(saved.teams);
+    renderSwimmers(saved.swimmers || []);
+    resultsSection.classList.remove('hidden');
+  } else {
+    lastTeamsResult = null;
+    renderTeams(null);
+    try {
+      await ensureDbPath();
+      const data = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath });
+      currentSwimmers = data.swimmers || [];
+      renderSwimmers(currentSwimmers);
+    } catch (_) {
+      currentSwimmers = [];
+      renderSwimmers([]);
+    }
+    resultsSection.classList.remove('hidden');
+  }
+}
+async function restoreLastMeetAndTeams() {
+  const lastId = getLastMeetId();
+  if (lastId != null && !isNaN(lastId) && currentCompetitions.some((c) => c.id === lastId)) {
+    selectedMeetId = lastId;
+    updateMeetTriggerText();
+  }
+  if (selectedMeetId != null) {
+    await applyLastTeamsForMeet(selectedMeetId);
+  }
 }
 
-function updateRunButton() {
+async function ensureDbPath() {
+  if (!dbPath) dbPath = await window.electronAPI.getDbPath();
+  return dbPath;
+}
+
+function getPaths() {
+  return {
+    bestTimesPath: (pathBestTimes.value || '').trim() || null,
+    namesRelaysPath: (pathNamesRelays.value || '').trim() || null,
+  };
+}
+
+function setLoading(msg) {
+  loadingEl.textContent = msg || 'Loading…';
+  loadingEl.classList.remove('hidden');
+}
+
+function clearLoading() {
+  loadingEl.classList.add('hidden');
+}
+
+function updateImportButton() {
   const { bestTimesPath, namesRelaysPath } = getPaths();
   const both = bestTimesPath && namesRelaysPath;
-  runBtn.disabled = !both;
-  runHint.textContent = both ? 'Click to build teams.' : 'Choose both files to enable.';
+  importBtn.disabled = !both;
 }
 
 function setFile(which, filePath) {
@@ -42,7 +139,7 @@ function setFile(which, filePath) {
     nameNamesRelays.textContent = name || 'Drop file or click to browse';
     cardNamesRelays.classList.toggle('has-file', !!filePath);
   }
-  updateRunButton();
+  updateImportButton();
 }
 
 async function onCardClick(which) {
@@ -52,20 +149,14 @@ async function onCardClick(which) {
 
 function setupDrop(card, which) {
   card.addEventListener('click', () => onCardClick(which));
-  card.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    card.classList.add('drag-over');
-  });
+  card.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); card.classList.add('drag-over'); });
   card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
   card.addEventListener('drop', (e) => {
     e.preventDefault();
     e.stopPropagation();
     card.classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
-    if (file && /\.(xlsx|xls)$/i.test(file.name)) {
-      setFile(which, file.path);
-    }
+    if (file && /\.(xlsx|xls)$/i.test(file.name)) setFile(which, file.path);
   });
 }
 
@@ -75,36 +166,16 @@ setupDrop(cardNamesRelays, 'names_relays');
 function formatTime(sec) {
   if (sec == null) return '–';
   const s = Number(sec);
-  if (isNaN(s)) return '–';
-  return `${s.toFixed(2)}s`;
+  return isNaN(s) ? '–' : `${s.toFixed(2)}s`;
 }
 
-function renderTeams(teamsByEvent) {
-  const strokeLabels = ['Backstroke', 'Breaststroke', 'Butterfly', 'Freestyle'];
-  let html = '';
-  for (const [eventName, teams] of Object.entries(teamsByEvent)) {
-    if (!teams.length) continue;
-    html += `<div class="event-block"><h4>${escapeHtml(eventName)}</h4>`;
-    for (const team of teams) {
-      const [lo, hi] = team.age_group_range;
-      html += `<div class="team-block">`;
-      html += `<div class="age-group">Age group ${lo}–${hi}</div>`;
-      html += `<div class="team-time">Total time: ${team.total_time}s (age sum: ${team.total_age})</div>`;
-      html += `<ul class="swimmers-list">`;
-      if (team.is_medley && team.stroke_labels) {
-        team.swimmers.forEach((s, i) => {
-          html += `<li><span class="stroke-label">${team.stroke_labels[i]}:</span>${escapeHtml(s.full_name)}</li>`;
-        });
-      } else {
-        team.swimmers.forEach((s) => {
-          html += `<li>${escapeHtml(s.full_name)}</li>`;
-        });
-      }
-      html += `</ul></div>`;
-    }
-    html += `</div>`;
-  }
-  teamsContainer.innerHTML = html || '<p class="text-muted">No teams built.</p>';
+function formatTimeMMSS(sec) {
+  if (sec == null) return '–';
+  const s = Number(sec);
+  if (isNaN(s)) return '–';
+  const min = Math.floor(s / 60);
+  const remainder = s % 60;
+  return `${min}:${remainder.toFixed(2).padStart(5, '0')}`;
 }
 
 function escapeHtml(s) {
@@ -114,17 +185,121 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
-function renderSwimmers(swimmers) {
-  swimmersList.innerHTML = swimmers
-    .map((s, index) => `<div class="swimmer-item" data-index="${index}">${escapeHtml(s.full_name)}</div>`)
-    .join('');
+function renderTeams(teamsByEvent) {
+  if (!teamsByEvent || !Object.keys(teamsByEvent).length) {
+    teamsContainer.innerHTML = '<p class="text-muted">Build teams to see results.</p>';
+    return;
+  }
+  let html = '';
+  for (const [eventName, teams] of Object.entries(teamsByEvent)) {
+    if (!teams.length) continue;
+    html += `<div class="event-block"><h4>${escapeHtml(eventName)}</h4>`;
+    for (const team of teams) {
+      const [lo, hi] = team.age_group_range;
+      html += `<div class="team-block">`;
+      html += `<div class="age-group">Age group ${lo}–${hi}</div>`;
+      html += `<div class="team-time">Total time: ${formatTimeMMSS(team.total_time)} (age sum: ${team.total_age})</div>`;
+      html += `<ul class="swimmers-list">`;
+      if (team.is_medley && team.stroke_labels) {
+        const strokeTimes = ['backstroke_50', 'breaststroke_50', 'butterfly_50', 'freestyle_50'];
+        team.swimmers.forEach((s, i) => {
+          const time = s[strokeTimes[i]];
+          html += `<li><span class="stroke-label">${team.stroke_labels[i]}:</span>${escapeHtml(s.full_name)} <span class="swimmer-time">(${formatTime(time)})</span></li>`;
+        });
+      } else {
+        team.swimmers.forEach((s) => {
+          html += `<li>${escapeHtml(s.full_name)} <span class="swimmer-time">(${formatTime(s.freestyle_50)})</span></li>`;
+        });
+      }
+      html += `</ul></div>`;
+    }
+    html += `</div>`;
+  }
+  teamsContainer.innerHTML = html;
+}
 
-  swimmersList.querySelectorAll('.swimmer-item').forEach((el) => {
-    el.addEventListener('click', () => {
-      const index = parseInt(el.getAttribute('data-index'), 10);
-      openSwimmerModal(lastResult.swimmers[index]);
+function getSelectedSwimmerIds() {
+  const checkboxes = swimmersList.querySelectorAll('.swimmer-row input[type="checkbox"]:checked');
+  return Array.from(checkboxes).map((cb) => parseInt(cb.value, 10)).filter((n) => !isNaN(n));
+}
+
+function getSelectedCompetitionIds() {
+  const checkboxes = meetDropdownList.querySelectorAll('input.competition-cb:checked');
+  return Array.from(checkboxes).map((cb) => parseInt(cb.value, 10)).filter((n) => !isNaN(n));
+}
+
+function updateRemoveButtonVisibility() {
+  const ids = getSelectedSwimmerIds();
+  if (ids.length > 0) {
+    removeSelectedBtn.classList.remove('hidden');
+  } else {
+    removeSelectedBtn.classList.add('hidden');
+  }
+  updateSelectAllButtonLabel();
+}
+
+function updateSelectAllButtonLabel() {
+  if (!swimmerSelectMode || !currentSwimmers.length) return;
+  const checkboxes = swimmersList.querySelectorAll('input.swimmer-cb');
+  const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every((cb) => cb.checked);
+  selectAllSwimmersBtn.textContent = allChecked ? 'Unselect all' : 'Select all';
+}
+
+function updateRemoveCompetitionsButtonVisibility() {
+  const ids = getSelectedCompetitionIds();
+  if (ids.length > 0) {
+    removeSelectedCompetitionsBtn.classList.remove('hidden');
+  } else {
+    removeSelectedCompetitionsBtn.classList.add('hidden');
+  }
+}
+
+function renderSwimmers(swimmers) {
+  currentSwimmers = swimmers || [];
+  if (!currentSwimmers.length) {
+    swimmersList.innerHTML = '<p class="text-muted">No swimmers. Import from Excel files.</p>';
+    removeSelectedBtn.classList.add('hidden');
+    selectAllSwimmersBtn.classList.add('hidden');
+    return;
+  }
+  if (swimmerSelectMode) {
+    swimmersList.innerHTML = currentSwimmers
+      .map(
+        (s, index) =>
+          `<div class="swimmer-row" data-index="${index}">
+            <input type="checkbox" value="${s.id ?? ''}" class="swimmer-cb" />
+            <span class="swimmer-name">${escapeHtml(s.full_name)}</span>
+          </div>`
+      )
+      .join('');
+    swimmersList.querySelectorAll('input.swimmer-cb').forEach((cb) => {
+      cb.addEventListener('change', updateRemoveButtonVisibility);
+    });
+  } else {
+    swimmersList.innerHTML = currentSwimmers
+      .map(
+        (s, index) =>
+          `<div class="swimmer-row swimmer-row-no-cb" data-index="${index}">
+            <span class="swimmer-name">${escapeHtml(s.full_name)}</span>
+          </div>`
+      )
+      .join('');
+  }
+  swimmersList.querySelectorAll('.swimmer-row').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.classList.contains('swimmer-cb')) return;
+      const index = parseInt(row.getAttribute('data-index'), 10);
+      openSwimmerModal(currentSwimmers[index]);
     });
   });
+  if (swimmerSelectMode) {
+    selectAllSwimmersBtn.classList.remove('hidden');
+    updateRemoveButtonVisibility();
+    updateSelectAllButtonLabel();
+  } else {
+    selectAllSwimmersBtn.classList.add('hidden');
+    removeSelectedBtn.classList.add('hidden');
+  }
 }
 
 function openSwimmerModal(s) {
@@ -157,23 +332,239 @@ modalOverlay.addEventListener('click', (e) => {
   if (e.target === modalOverlay) modalOverlay.classList.add('hidden');
 });
 
-runBtn.addEventListener('click', async () => {
+async function loadSwimmers() {
+  setLoading('Loading swimmers…');
+  try {
+    await ensureDbPath();
+    const data = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath });
+    currentSwimmers = data.swimmers || [];
+    renderSwimmers(currentSwimmers);
+  } catch (err) {
+    currentSwimmers = [];
+    renderSwimmers([]);
+    runHint.textContent = 'Could not load swimmers: ' + (err.message || String(err));
+  } finally {
+    clearLoading();
+  }
+}
+
+async function loadCompetitions() {
+  try {
+    await ensureDbPath();
+    const data = await window.electronAPI.runBackend({ command: 'list-competitions', dbPath });
+    renderCompetitions(data.competitions || []);
+    await restoreLastMeetAndTeams();
+  } catch (_) {
+    renderCompetitions([]);
+  }
+}
+
+function updateMeetTriggerText() {
+  const selected = currentCompetitions.find((c) => c.id === selectedMeetId);
+  meetDropdownTrigger.textContent = selected ? selected.name : 'Select a meet';
+}
+
+function closeMeetDropdown() {
+  meetDropdownPanel.classList.add('hidden');
+}
+
+function renderCompetitions(competitions) {
+  currentCompetitions = competitions || [];
+  if (!currentCompetitions.length) {
+    meetDropdownList.innerHTML = '';
+    meetDropdownTrigger.textContent = 'Select a meet';
+    selectedMeetId = null;
+    removeSelectedCompetitionsBtn.classList.add('hidden');
+    return;
+  }
+  meetDropdownList.innerHTML = currentCompetitions
+    .map(
+      (c) =>
+        `<div class="meet-dropdown-item" data-id="${c.id}">
+          <input type="checkbox" value="${c.id}" class="competition-cb" />
+          <div class="meet-dropdown-item-content">
+            <span class="comp-name">${escapeHtml(c.name)}</span>
+            <span class="comp-dates">${escapeHtml(c.start_date)} – ${escapeHtml(c.end_date)}</span>
+            <span class="comp-location">${escapeHtml(c.location)}</span>
+          </div>
+        </div>`
+    )
+    .join('');
+
+  meetDropdownList.querySelectorAll('input.competition-cb').forEach((cb) => {
+    cb.addEventListener('change', (e) => { e.stopPropagation(); updateRemoveCompetitionsButtonVisibility(); });
+  });
+  meetDropdownList.querySelectorAll('.meet-dropdown-item').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.type === 'checkbox') return;
+      selectedMeetId = parseInt(row.getAttribute('data-id'), 10);
+      setLastMeetId(selectedMeetId);
+      updateMeetTriggerText();
+      closeMeetDropdown();
+      applyLastTeamsForMeet(selectedMeetId); // async, no await needed
+    });
+  });
+  if (!currentCompetitions.some((c) => c.id === selectedMeetId)) {
+    selectedMeetId = null;
+  }
+  updateMeetTriggerText();
+  updateRemoveCompetitionsButtonVisibility();
+}
+
+meetDropdownTrigger.addEventListener('click', (e) => {
+  e.stopPropagation();
+  meetDropdownPanel.classList.toggle('hidden');
+});
+document.addEventListener('click', () => {
+  if (!meetDropdownPanel.classList.contains('hidden')) closeMeetDropdown();
+});
+meetDropdownPanel.addEventListener('click', (e) => e.stopPropagation());
+
+importBtn.addEventListener('click', async () => {
   const { bestTimesPath, namesRelaysPath } = getPaths();
   if (!bestTimesPath || !namesRelaysPath) return;
-  loadingEl.classList.remove('hidden');
-  runBtn.disabled = true;
+  setLoading('Importing…');
+  importBtn.disabled = true;
   try {
-    const data = await window.electronAPI.runScript({ bestTimesPath, namesRelaysPath });
-    lastResult = data;
-    renderTeams(data.teams);
+    await ensureDbPath();
+    const data = await window.electronAPI.runBackend({
+      command: 'import-files',
+      dbPath,
+      bestTimesPath,
+      namesRelaysPath,
+    });
     renderSwimmers(data.swimmers);
-    resultsSection.classList.remove('hidden');
+    alert(`Imported: ${data.imported || 0} added, ${data.updated || 0} updated.`);
   } catch (err) {
     alert('Error: ' + (err.message || String(err)));
   } finally {
-    loadingEl.classList.add('hidden');
-    updateRunButton();
+    clearLoading();
+    updateImportButton();
   }
 });
 
-updateRunButton();
+runBtn.addEventListener('click', async () => {
+  setLoading('Building teams…');
+  runBtn.disabled = true;
+  try {
+    await ensureDbPath();
+    const data = await window.electronAPI.runBackend({ command: 'build-teams', dbPath });
+    lastTeamsResult = data;
+    renderTeams(data.teams);
+    renderSwimmers(data.swimmers);
+    resultsSection.classList.remove('hidden');
+    if (selectedMeetId != null) {
+      setLastTeamsForMeet(selectedMeetId, data);
+      setLastMeetId(selectedMeetId);
+    }
+  } catch (err) {
+    alert('Error: ' + (err.message || String(err)));
+  } finally {
+    clearLoading();
+    runBtn.disabled = false;
+  }
+});
+
+selectModeBtn.addEventListener('click', () => {
+  swimmerSelectMode = !swimmerSelectMode;
+  selectModeBtn.textContent = swimmerSelectMode ? 'Done' : 'Select';
+  renderSwimmers(currentSwimmers);
+  if (swimmerSelectMode) {
+    updateSelectAllButtonLabel();
+  }
+});
+
+selectAllSwimmersBtn.addEventListener('click', () => {
+  const checkboxes = swimmersList.querySelectorAll('input.swimmer-cb');
+  const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every((cb) => cb.checked);
+  checkboxes.forEach((cb) => { cb.checked = !allChecked; });
+  updateRemoveButtonVisibility();
+});
+
+removeSelectedBtn.addEventListener('click', async () => {
+  const ids = getSelectedSwimmerIds();
+  if (!ids.length) return;
+  if (!confirm(`Remove ${ids.length} selected swimmer(s)?`)) return;
+  setLoading('Removing…');
+  try {
+    await ensureDbPath();
+    const data = await window.electronAPI.runBackend({
+      command: 'delete-swimmers',
+      dbPath,
+      payload: { ids },
+    });
+    renderSwimmers(data.swimmers);
+  } catch (err) {
+    alert('Error: ' + (err.message || String(err)));
+  } finally {
+    clearLoading();
+  }
+});
+
+removeSelectedCompetitionsBtn.addEventListener('click', async () => {
+  const ids = getSelectedCompetitionIds();
+  if (!ids.length) return;
+  if (!confirm(`Remove ${ids.length} selected competition(s)?`)) return;
+  setLoading('Removing…');
+  try {
+    await ensureDbPath();
+    const data = await window.electronAPI.runBackend({
+      command: 'delete-competitions',
+      dbPath,
+      payload: { ids },
+    });
+    if (ids.includes(selectedMeetId)) selectedMeetId = null;
+    closeMeetDropdown();
+    renderCompetitions(data.competitions);
+  } catch (err) {
+    alert('Error: ' + (err.message || String(err)));
+  } finally {
+    clearLoading();
+  }
+});
+
+addCompetitionBtn.addEventListener('click', () => {
+  addCompetitionForm.reset();
+  document.getElementById('comp-location').value = '';
+  addCompetitionModal.classList.remove('hidden');
+});
+
+function closeAddCompetitionModal() {
+  addCompetitionModal.classList.add('hidden');
+}
+
+addCompetitionClose.addEventListener('click', closeAddCompetitionModal);
+addCompetitionCancel.addEventListener('click', closeAddCompetitionModal);
+addCompetitionModal.addEventListener('click', (e) => {
+  if (e.target === addCompetitionModal) closeAddCompetitionModal();
+});
+
+addCompetitionSave.addEventListener('click', async () => {
+  const name = document.getElementById('comp-name').value.trim();
+  const start = document.getElementById('comp-start').value;
+  const end = document.getElementById('comp-end').value;
+  const location = document.getElementById('comp-location').value.trim() || '';
+  if (!name || !start || !end) {
+    alert('Please fill in name, start date, and end date.');
+    return;
+  }
+  setLoading('Adding competition…');
+  try {
+    await ensureDbPath();
+    const data = await window.electronAPI.runBackend({
+      command: 'add-competition',
+      dbPath,
+      payload: { name, start_date: start, end_date: end, location },
+    });
+    renderCompetitions(data.competitions);
+    closeAddCompetitionModal();
+  } catch (err) {
+    alert('Error: ' + (err.message || String(err)));
+  } finally {
+    clearLoading();
+  }
+});
+
+updateImportButton();
+loadSwimmers();
+loadCompetitions();

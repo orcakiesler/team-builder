@@ -23,6 +23,75 @@ body {
   min-height: 100vh;
 }
 
+.competitions-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 2rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.meet-selector { position: relative; flex: 0 1 auto; min-width: 0; max-width: 240px; }
+.meet-selector-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+.meet-dropdown-trigger {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meet-dropdown-trigger:hover { border-color: var(--accent); }
+.meet-dropdown-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 280px;
+  margin-top: 0.25rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-height: 320px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+}
+.meet-dropdown-panel.hidden { display: none; }
+.meet-dropdown-list {
+  overflow-y: auto;
+  padding: 0.25rem 0;
+}
+.meet-dropdown-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.meet-dropdown-item:last-child { border-bottom: none; }
+.meet-dropdown-item:hover { background: var(--surface); }
+.meet-dropdown-item input[type="checkbox"] { flex-shrink: 0; margin-top: 0.2rem; cursor: pointer; }
+.meet-dropdown-item-content { flex: 1; min-width: 0; }
+.meet-dropdown-item .comp-name { font-weight: 600; display: block; }
+.meet-dropdown-item .comp-dates { color: var(--text-muted); font-size: 0.8em; }
+.meet-dropdown-item .comp-location { color: var(--text-muted); font-size: 0.8em; }
+.meet-dropdown-actions { padding: 0.5rem 0.75rem; border-top: 1px solid var(--border); }
+.competitions-box .btn-add { flex-shrink: 0; }
+
 .header {
   padding: 1.5rem 2rem;
   border-bottom: 1px solid var(--border);
@@ -83,9 +152,41 @@ body {
   color: var(--text);
 }
 
+.action-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.action-row .run-btn { flex: 1; }
+.btn {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+.btn-primary {
+  color: #fff;
+  background: var(--accent);
+}
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn-secondary {
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover:not(:disabled) { background: var(--border); }
+.btn-danger {
+  color: #fff;
+  background: #da3633;
+}
+.btn-danger:hover:not(:disabled) { background: #b62324; }
+.btn-sm { padding: 0.4rem 0.75rem; font-size: 0.85rem; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .run-btn {
-  display: block;
-  width: 100%;
   padding: 0.75rem 1.5rem;
   font-size: 1rem;
   font-weight: 600;
@@ -126,6 +227,26 @@ body {
   font-size: 0.85em;
 }
 
+.btn-add {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.btn-add:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
 .results-section {
   padding: 0 2rem 2rem;
 }
@@ -153,6 +274,16 @@ body {
   font-weight: 600;
   border-bottom: 1px solid var(--border);
 }
+
+.swimmers-toolbar {
+  padding: 0.5rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.swimmers-toolbar .btn { margin: 0; flex-shrink: 0; }
 
 .teams-container {
   padding: 1rem 1.25rem;
@@ -197,12 +328,34 @@ body {
   color: var(--text-muted);
   margin-right: 0.5rem;
 }
+.team-block .swimmers-list .swimmer-time {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  margin-left: 0.25rem;
+}
 
 .swimmers-panel .swimmers-list {
   padding: 0.5rem 1.25rem 1rem;
   max-height: 70vh;
   overflow-y: auto;
 }
+.swimmer-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.swimmer-row:last-child { border-bottom: none; }
+.swimmer-row input[type="checkbox"] { flex-shrink: 0; cursor: pointer; }
+.swimmer-row .swimmer-name {
+  flex: 1;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.swimmer-row .swimmer-name:hover { color: var(--accent); }
+.swimmer-row-no-cb .swimmer-name { cursor: pointer; }
 .swimmer-item {
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--border);
@@ -210,12 +363,8 @@ body {
   font-size: 0.9rem;
   transition: color 0.2s;
 }
-.swimmer-item:last-child {
-  border-bottom: none;
-}
-.swimmer-item:hover {
-  color: var(--accent);
-}
+.swimmer-item:last-child { border-bottom: none; }
+.swimmer-item:hover { color: var(--accent); }
 
 .modal-overlay {
   position: fixed;
@@ -293,6 +442,37 @@ body {
   justify-content: space-between;
   padding: 0.2rem 0;
 }
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--border);
+}
+.form-group {
+  margin-bottom: 1rem;
+}
+.form-group label {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-bottom: 0.25rem;
+}
+.form-group input[type="text"],
+.form-group input[type="date"] {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+.form-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.text-muted { color: var(--text-muted); font-size: 0.9rem; }
 
 .loading {
   position: fixed;

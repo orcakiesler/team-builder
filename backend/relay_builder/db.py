@@ -2,18 +2,21 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import date
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Dict, Iterable, List
 
 from .models import Person
 
 
+def ensure_database(db_path: str | Path) -> None:
+    """Create the database and tables if they do not exist."""
+    create_database(db_path)
+
+
 def create_database(db_path: str | Path) -> None:
     """
-    Create (or recreate) a simple SQLite database for swimmers.
-
-    The schema is intentionally straightforward: one table with JSON-encoded
-    availability. If you ever need a more normalized schema, we can extend this.
+    Create (or recreate) a simple SQLite database for swimmers and competitions.
     """
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -36,6 +39,222 @@ def create_database(db_path: str | Path) -> None:
             )
             """
         )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS competitions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                location TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+
+
+def _row_to_swimmer_dict(row: tuple) -> Dict[str, Any]:
+    (
+        id_,
+        first_name,
+        last_name,
+        gender,
+        year_of_birth,
+        freestyle_50,
+        backstroke_50,
+        breaststroke_50,
+        butterfly_50,
+        availability_json,
+    ) = row
+    availability = json.loads(availability_json) if availability_json else {}
+    full_name = f"{first_name or ''} {last_name or ''}".strip()
+    age = (date.today().year - year_of_birth) if year_of_birth is not None else None
+    return {
+        "id": id_,
+        "first_name": first_name or "",
+        "last_name": last_name or "",
+        "full_name": full_name,
+        "gender": gender,
+        "year_of_birth": year_of_birth,
+        "age": age,
+        "freestyle_50": freestyle_50,
+        "backstroke_50": backstroke_50,
+        "breaststroke_50": breaststroke_50,
+        "butterfly_50": butterfly_50,
+        "availability": availability,
+    }
+
+
+def load_all(db_path: str | Path) -> List[Dict[str, Any]]:
+    """Load all swimmers, ordered by first name A-Z."""
+    path = Path(db_path)
+    if not path.exists():
+        return []
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, first_name, last_name, gender, year_of_birth,
+                   freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
+                   availability_json
+            FROM swimmers
+            ORDER BY first_name, last_name
+            """
+        )
+        return [_row_to_swimmer_dict(row) for row in cur.fetchall()]
+
+
+def insert_one(db_path: str | Path, person: Person) -> int:
+    """Insert a single Person and return the new row id."""
+    path = Path(db_path)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO swimmers (
+                first_name, last_name, gender, year_of_birth,
+                freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
+                availability_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                person.first_name,
+                person.last_name,
+                person.gender,
+                person.year_of_birth,
+                person.freestyle_50,
+                person.backstroke_50,
+                person.breaststroke_50,
+                person.butterfly_50,
+                json.dumps(person.availability, ensure_ascii=False),
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def delete_swimmers(db_path: str | Path, ids: List[int]) -> None:
+    """Delete swimmers by id list."""
+    if not ids:
+        return
+    path = Path(db_path)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        placeholders = ",".join("?" * len(ids))
+        cur.execute(f"DELETE FROM swimmers WHERE id IN ({placeholders})", ids)
+        conn.commit()
+
+
+def load_competitions(db_path: str | Path) -> List[Dict[str, Any]]:
+    """Load all competitions, ordered by start_date."""
+    path = Path(db_path)
+    if not path.exists():
+        return []
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, name, start_date, end_date, location
+            FROM competitions
+            ORDER BY start_date
+            """
+        )
+        return [
+            {
+                "id": row[0],
+                "name": row[1],
+                "start_date": row[2],
+                "end_date": row[3],
+                "location": row[4],
+            }
+            for row in cur.fetchall()
+        ]
+
+
+def add_competition(
+    db_path: str | Path,
+    name: str,
+    start_date: str,
+    end_date: str,
+    location: str,
+) -> Dict[str, Any]:
+    """Insert a competition and return the new row as dict."""
+    path = Path(db_path)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO competitions (name, start_date, end_date, location)
+            VALUES (?, ?, ?, ?)
+            """,
+            (name, start_date, end_date, location),
+        )
+        conn.commit()
+        row_id = cur.lastrowid
+    return {
+        "id": row_id,
+        "name": name,
+        "start_date": start_date,
+        "end_date": end_date,
+        "location": location,
+    }
+
+
+def delete_competitions(db_path: str | Path, ids: List[int]) -> None:
+    """Delete competitions by id list."""
+    if not ids:
+        return
+    path = Path(db_path)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        placeholders = ",".join("?" * len(ids))
+        cur.execute(f"DELETE FROM competitions WHERE id IN ({placeholders})", ids)
+        conn.commit()
+
+
+def update_swimmer(
+    db_path: str | Path,
+    id_: int,
+    *,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    gender: str | None = None,
+    year_of_birth: int | None = None,
+    freestyle_50: float | None = None,
+    backstroke_50: float | None = None,
+    breaststroke_50: float | None = None,
+    butterfly_50: float | None = None,
+    availability: Dict[str, bool] | None = None,
+) -> None:
+    """Update a single swimmer by id."""
+    path = Path(db_path)
+    updates = []
+    args = []
+    if first_name is not None:
+        updates.append("first_name = ?"); args.append(first_name)
+    if last_name is not None:
+        updates.append("last_name = ?"); args.append(last_name)
+    if gender is not None:
+        updates.append("gender = ?"); args.append(gender)
+    if year_of_birth is not None:
+        updates.append("year_of_birth = ?"); args.append(year_of_birth)
+    if freestyle_50 is not None:
+        updates.append("freestyle_50 = ?"); args.append(freestyle_50)
+    if backstroke_50 is not None:
+        updates.append("backstroke_50 = ?"); args.append(backstroke_50)
+    if breaststroke_50 is not None:
+        updates.append("breaststroke_50 = ?"); args.append(breaststroke_50)
+    if butterfly_50 is not None:
+        updates.append("butterfly_50 = ?"); args.append(butterfly_50)
+    if availability is not None:
+        updates.append("availability_json = ?"); args.append(json.dumps(availability, ensure_ascii=False))
+    if not updates:
+        return
+    args.append(id_)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(f"UPDATE swimmers SET {', '.join(updates)} WHERE id = ?", args)
         conn.commit()
 
 
