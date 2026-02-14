@@ -5,6 +5,10 @@ const { spawn } = require('child_process');
 let mainWindow;
 const backendDir = path.resolve(__dirname, '..', 'backend');
 
+function getDbPath() {
+  return path.join(app.getPath('userData'), 'swimmers.db');
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -32,6 +36,8 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
+ipcMain.handle('get-db-path', () => getDbPath());
+
 ipcMain.handle('select-file', async (_, { which }) => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: which === 'best_times' ? 'Select best times Excel file' : 'Select names/relays Excel file',
@@ -42,19 +48,27 @@ ipcMain.handle('select-file', async (_, { which }) => {
   return result.filePaths[0];
 });
 
-ipcMain.handle('run-script', async (_, { bestTimesPath, namesRelaysPath }) => {
+ipcMain.handle('run-backend', async (_, options) => {
+  const dbPath = options.dbPath || getDbPath();
+  const command = options.command;
+  const isWin = process.platform === 'win32';
+  const useStdin = command === 'update-swimmer';
+
+  const args = ['run', 'python', 'app_entry.py', '--db', dbPath, '--command', command];
+  if (command === 'import-files' && options.bestTimesPath && options.namesRelaysPath) {
+    args.push('--best-times', options.bestTimesPath, '--names-relays', options.namesRelaysPath);
+  }
+  if (command === 'build-teams' && options.referenceYear != null) {
+    args.push('--reference-year', String(options.referenceYear));
+  }
+
   return new Promise((resolve, reject) => {
-    const isWin = process.platform === 'win32';
-    const args = [
-      'run', 'python', 'app_entry.py',
-      '--best-times', bestTimesPath,
-      '--names-relays', namesRelaysPath,
-    ];
+    const stdio = useStdin ? ['pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'];
     const child = spawn('poetry', args, {
       cwd: backendDir,
       env: process.env,
       shell: isWin,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio,
     });
 
     let stdout = '';
@@ -62,6 +76,13 @@ ipcMain.handle('run-script', async (_, { bestTimesPath, namesRelaysPath }) => {
 
     child.stdout.on('data', (d) => { stdout += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
+
+    if (useStdin && options.payload != null) {
+      child.stdin.write(JSON.stringify(options.payload), (err) => {
+        if (err) reject(err);
+        else child.stdin.end();
+      });
+    }
 
     child.on('close', (code) => {
       if (code !== 0) {

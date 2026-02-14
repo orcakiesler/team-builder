@@ -9,7 +9,7 @@
 <body>
   <header class="header">
     <h1>Relay Team Builder</h1>
-    <p class="subtitle">Load your Excel files and build the fastest relay teams by age group.</p>
+    <p class="subtitle">Build your best relay teams, modify swimmers in the database, or import from Excel.</p>
   </header>
 
   <section class="upload-section">
@@ -25,15 +25,18 @@
         <input type="hidden" id="path-names-relays" />
       </div>
     </div>
-    <button type="button" class="run-btn" id="run-btn" disabled>Build teams</button>
-    <p class="run-hint" id="run-hint">Choose both files to enable.</p>
+    <div class="action-buttons">
+      <button type="button" class="btn btn-secondary" id="import-btn" disabled>Import from files</button>
+      <button type="button" class="btn btn-primary" id="run-btn">Build teams</button>
+    </div>
+    <p class="run-hint" id="run-hint">Import Excel files to add/update swimmers, or build teams from the database.</p>
   </section>
 
-  <section class="results-section hidden" id="results-section">
+  <section class="results-section" id="results-section">
     <div class="panels">
       <div class="panel teams-panel">
         <h2>Teams by event</h2>
-        <div class="teams-container" id="teams-container"></div>
+        <div class="teams-container" id="teams-container"><p class="text-muted">Build teams to see results.</p></div>
       </div>
       <div class="panel swimmers-panel">
         <h2>Swimmers</h2>
@@ -49,10 +52,29 @@
         <button type="button" class="modal-close" id="modal-close" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer hidden" id="modal-footer">
+        <button type="button" class="btn btn-secondary" id="modal-edit-btn">Edit</button>
+      </div>
     </div>
   </div>
 
-  <div class="loading hidden" id="loading">Building teams…</div>
+  <div class="modal-overlay hidden" id="edit-modal-overlay">
+    <div class="modal modal-wide" id="edit-modal">
+      <div class="modal-header">
+        <h3>Edit swimmer</h3>
+        <button type="button" class="modal-close" id="edit-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-swimmer-form"></form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="edit-cancel-btn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="edit-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="loading hidden" id="loading"></div>
 
   <script src="renderer.js"></script>
 </body>

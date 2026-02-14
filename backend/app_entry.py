@@ -1,6 +1,7 @@
 """
-Entry point for the Electron app only. Uses relay_builder directly (no main.py).
-Reads two file paths, loads swimmers, builds teams, prints JSON to stdout.
+Entry point for the Electron app only. Uses relay_builder and db.
+Supports: list-swimmers, build-teams, import-files, update-swimmer.
+All commands require --db <path>. JSON output to stdout.
 """
 
 from __future__ import annotations
@@ -27,23 +28,8 @@ from relay_builder.events.medley_women.team_builder import build_teams as build_
 from relay_builder.events.medley_men.team_builder import build_teams as build_medley_men
 from relay_builder.events.mixed_freestyle.team_builder import build_teams as build_mixed_freestyle
 from relay_builder.events.mixed_medley.team_builder import build_teams as build_mixed_medley
-
-
-def _person_to_dict(p) -> dict:
-    return {
-        "first_name": p.first_name,
-        "last_name": p.last_name,
-        "full_name": p.full_name,
-        "gender": p.gender,
-        "year_of_birth": p.year_of_birth,
-        "age": p.age,
-        "freestyle_50": p.freestyle_50,
-        "backstroke_50": p.backstroke_50,
-        "breaststroke_50": p.breaststroke_50,
-        "butterfly_50": p.butterfly_50,
-        "availability": p.availability,
-    }
-
+from relay_builder.models import Person
+from relay_builder import db as relay_db
 
 EVENT_CONFIGS = [
     ("Women's 4x50 Freestyle", filter_freestyle_women, build_freestyle_women, False),
@@ -56,16 +42,58 @@ EVENT_CONFIGS = [
 STROKE_LABELS = ["Backstroke", "Breaststroke", "Butterfly", "Freestyle"]
 
 
-def run(best_times_path: str, names_relays_path: str, reference_year: int | None = None) -> dict:
-    best = Path(best_times_path)
-    names = Path(names_relays_path)
-    if not best.is_file():
-        raise FileNotFoundError(f"File not found: {best}")
-    if not names.is_file():
-        raise FileNotFoundError(f"File not found: {names}")
+def _swimmer_dict_to_person(d: dict) -> Person:
+    """Build a Person from a swimmer dict (e.g. from load_all). Id is ignored."""
+    return Person(
+        first_name=d.get("first_name") or "",
+        last_name=d.get("last_name") or "",
+        gender=d.get("gender"),
+        year_of_birth=d.get("year_of_birth"),
+        age=d.get("age"),
+        freestyle_50=d.get("freestyle_50"),
+        backstroke_50=d.get("backstroke_50"),
+        breaststroke_50=d.get("breaststroke_50"),
+        butterfly_50=d.get("butterfly_50"),
+        availability=d.get("availability") or {},
+    )
 
-    people = load_people(best, names)
+
+def _people_from_db(db_path: str | Path) -> list[Person]:
+    """Load all swimmers from DB as Person objects for team building."""
+    rows = relay_db.load_all(db_path)
+    return [_swimmer_dict_to_person(r) for r in rows]
+
+
+def _person_to_dict(p: Person, id_: int | None = None) -> dict:
+    out = {
+        "first_name": p.first_name,
+        "last_name": p.last_name,
+        "full_name": p.full_name,
+        "gender": p.gender,
+        "year_of_birth": p.year_of_birth,
+        "age": p.age,
+        "freestyle_50": p.freestyle_50,
+        "backstroke_50": p.backstroke_50,
+        "breaststroke_50": p.breaststroke_50,
+        "butterfly_50": p.butterfly_50,
+        "availability": p.availability,
+    }
+    if id_ is not None:
+        out["id"] = id_
+    return out
+
+
+def cmd_list_swimmers(db_path: Path) -> dict:
+    relay_db.ensure_database(db_path)
+    swimmers = relay_db.load_all(db_path)
+    return {"swimmers": swimmers}
+
+
+def cmd_build_teams(db_path: Path, reference_year: int | None = None) -> dict:
+    relay_db.ensure_database(db_path)
     reference_year = reference_year or date.today().year
+    people = _people_from_db(db_path)
+    swimmers_with_id = relay_db.load_all(db_path)
 
     teams_by_event = {}
     for event_name, filter_func, build_func, is_medley in EVENT_CONFIGS:
@@ -85,19 +113,117 @@ def run(best_times_path: str, names_relays_path: str, reference_year: int | None
 
     return {
         "reference_year": reference_year,
-        "swimmers": [_person_to_dict(p) for p in people],
+        "swimmers": swimmers_with_id,
         "teams": teams_by_event,
     }
 
 
+def cmd_import_files(db_path: Path, best_times_path: str, names_relays_path: str) -> dict:
+    best = Path(best_times_path)
+    names = Path(names_relays_path)
+    if not best.is_file():
+        raise FileNotFoundError(f"File not found: {best}")
+    if not names.is_file():
+        raise FileNotFoundError(f"File not found: {names}")
+
+    relay_db.ensure_database(db_path)
+    people_from_files = load_people(best, names)
+    existing = relay_db.load_all(db_path)
+    name_to_id = {}
+    for row in existing:
+        key = (str(row.get("first_name") or "").strip().lower(), str(row.get("last_name") or "").strip().lower())
+        name_to_id[key] = row["id"]
+
+    added = 0
+    updated = 0
+    for p in people_from_files:
+        key = (p.first_name.strip().lower(), p.last_name.strip().lower())
+        if key in name_to_id:
+            relay_db.update_swimmer(
+                db_path,
+                name_to_id[key],
+                first_name=p.first_name,
+                last_name=p.last_name,
+                gender=p.gender,
+                year_of_birth=p.year_of_birth,
+                freestyle_50=p.freestyle_50,
+                backstroke_50=p.backstroke_50,
+                breaststroke_50=p.breaststroke_50,
+                butterfly_50=p.butterfly_50,
+                availability=p.availability,
+            )
+            updated += 1
+        else:
+            new_id = relay_db.insert_one(db_path, p)
+            name_to_id[key] = new_id
+            added += 1
+
+    swimmers = relay_db.load_all(db_path)
+    return {
+        "swimmers": swimmers,
+        "imported": added,
+        "updated": updated,
+    }
+
+
+def cmd_update_swimmer(db_path: Path, payload: dict) -> dict:
+    swimmer_id = payload.get("id")
+    if swimmer_id is None:
+        raise ValueError("Missing 'id' in update payload")
+    relay_db.ensure_database(db_path)
+
+    kwargs = {}
+    if "first_name" in payload:
+        kwargs["first_name"] = payload["first_name"]
+    if "last_name" in payload:
+        kwargs["last_name"] = payload["last_name"]
+    if "gender" in payload:
+        kwargs["gender"] = payload["gender"]
+    if "year_of_birth" in payload:
+        kwargs["year_of_birth"] = payload["year_of_birth"]
+    if "freestyle_50" in payload:
+        kwargs["freestyle_50"] = payload["freestyle_50"]
+    if "backstroke_50" in payload:
+        kwargs["backstroke_50"] = payload["backstroke_50"]
+    if "breaststroke_50" in payload:
+        kwargs["breaststroke_50"] = payload["breaststroke_50"]
+    if "butterfly_50" in payload:
+        kwargs["butterfly_50"] = payload["butterfly_50"]
+    if "availability" in payload:
+        kwargs["availability"] = payload["availability"]
+
+    relay_db.update_swimmer(db_path, int(swimmer_id), **kwargs)
+    updated = relay_db.load_all(db_path)
+    one = next((s for s in updated if s["id"] == int(swimmer_id)), None)
+    return {"swimmer": one} if one else {"swimmer": None}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--best-times", required=True)
-    parser.add_argument("--names-relays", required=True)
+    parser.add_argument("--db", required=True, help="Path to SQLite database file")
+    parser.add_argument("--command", required=True, choices=["list-swimmers", "build-teams", "import-files", "update-swimmer"])
+    parser.add_argument("--best-times", default=None)
+    parser.add_argument("--names-relays", default=None)
     parser.add_argument("--reference-year", type=int, default=None)
     args = parser.parse_args()
+
+    db_path = Path(args.db)
+
     try:
-        out = run(args.best_times, args.names_relays, args.reference_year)
+        if args.command == "list-swimmers":
+            out = cmd_list_swimmers(db_path)
+        elif args.command == "build-teams":
+            out = cmd_build_teams(db_path, args.reference_year)
+        elif args.command == "import-files":
+            if not args.best_times or not args.names_relays:
+                raise ValueError("import-files requires --best-times and --names-relays")
+            out = cmd_import_files(db_path, args.best_times, args.names_relays)
+        elif args.command == "update-swimmer":
+            payload = json.load(sys.stdin)
+            out = cmd_update_swimmer(db_path, payload)
+        else:
+            raise ValueError(f"Unknown command: {args.command}")
+
         print(json.dumps(out, ensure_ascii=False))
     except Exception as e:
         print(json.dumps({"error": str(e)}, ensure_ascii=False), file=sys.stderr)
