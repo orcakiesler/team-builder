@@ -204,11 +204,13 @@ function renderTeams(teamsByEvent) {
         const strokeTimes = ['backstroke_50', 'breaststroke_50', 'butterfly_50', 'freestyle_50'];
         team.swimmers.forEach((s, i) => {
           const time = s[strokeTimes[i]];
-          html += `<li><span class="stroke-label">${team.stroke_labels[i]}:</span>${escapeHtml(s.full_name)} <span class="swimmer-time">(${formatTime(time)})</span></li>`;
+          const ageStr = s.age != null ? `, ${s.age}` : '';
+          html += `<li><span class="stroke-label">${team.stroke_labels[i]}:</span>${escapeHtml(s.full_name)}${ageStr} <span class="swimmer-time">(${formatTime(time)})</span></li>`;
         });
       } else {
         team.swimmers.forEach((s) => {
-          html += `<li>${escapeHtml(s.full_name)} <span class="swimmer-time">(${formatTime(s.freestyle_50)})</span></li>`;
+          const ageStr = s.age != null ? `, ${s.age}` : '';
+          html += `<li>${escapeHtml(s.full_name)}${ageStr} <span class="swimmer-time">(${formatTime(s.freestyle_50)})</span></li>`;
         });
       }
       html += `</ul></div>`;
