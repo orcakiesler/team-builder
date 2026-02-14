@@ -213,6 +213,11 @@ body {
   color: var(--text-muted);
   margin-right: 0.5rem;
 }
+.team-block .swimmers-list .swimmer-time {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  margin-left: 0.25rem;
+}
 
 .swimmers-panel .swimmers-list {
   padding: 0.5rem 1.25rem 1rem;

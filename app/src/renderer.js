@@ -103,6 +103,16 @@ function formatTime(sec) {
   return `${s.toFixed(2)}s`;
 }
 
+/** Total time as minutes:seconds.hundredths (e.g. 2:03.45) */
+function formatTimeMMSS(sec) {
+  if (sec == null) return '–';
+  const s = Number(sec);
+  if (isNaN(s)) return '–';
+  const min = Math.floor(s / 60);
+  const remainder = s % 60;
+  return `${min}:${remainder.toFixed(2).padStart(5, '0')}`;
+}
+
 function escapeHtml(s) {
   if (s == null) return '';
   const div = document.createElement('div');
@@ -124,15 +134,17 @@ function renderTeams(teamsByEvent) {
       const [lo, hi] = team.age_group_range;
       html += `<div class="team-block">`;
       html += `<div class="age-group">Age group ${lo}–${hi}</div>`;
-      html += `<div class="team-time">Total time: ${team.total_time}s (age sum: ${team.total_age})</div>`;
+      html += `<div class="team-time">Total time: ${formatTimeMMSS(team.total_time)} (age sum: ${team.total_age})</div>`;
       html += `<ul class="swimmers-list">`;
       if (team.is_medley && team.stroke_labels) {
+        const strokeTimes = ['backstroke_50', 'breaststroke_50', 'butterfly_50', 'freestyle_50'];
         team.swimmers.forEach((s, i) => {
-          html += `<li><span class="stroke-label">${team.stroke_labels[i]}:</span>${escapeHtml(s.full_name)}</li>`;
+          const time = s[strokeTimes[i]];
+          html += `<li><span class="stroke-label">${team.stroke_labels[i]}:</span>${escapeHtml(s.full_name)} <span class="swimmer-time">(${formatTime(time)})</span></li>`;
         });
       } else {
         team.swimmers.forEach((s) => {
-          html += `<li>${escapeHtml(s.full_name)}</li>`;
+          html += `<li>${escapeHtml(s.full_name)} <span class="swimmer-time">(${formatTime(s.freestyle_50)})</span></li>`;
         });
       }
       html += `</ul></div>`;

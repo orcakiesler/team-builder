@@ -160,7 +160,7 @@ def load_all(db_path: str | Path) -> List[Dict[str, Any]]:
                    freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
                    availability_json
             FROM swimmers
-            ORDER BY last_name, first_name
+            ORDER BY first_name, last_name
             """
         )
         return [_row_to_swimmer_dict(row) for row in cur.fetchall()]
