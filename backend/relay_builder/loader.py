@@ -109,10 +109,6 @@ def load_people(
     best_df = _normalize_column_names(best_df)
     avail_df = _normalize_column_names(avail_df)
 
-    # Debug: print all columns to help diagnose missing yob column
-    print(f"DEBUG: best_times columns: {list(best_df.columns)}")
-    print(f"DEBUG: names_relays columns: {list(avail_df.columns)}")
-
     # Guess name / identity columns using shared constants
 
     def find_col(df, candidates):
@@ -131,8 +127,6 @@ def load_people(
     avail_last_name_col = find_col(avail_df, LAST_NAME_CANDIDATES)
     avail_yob_col = find_col(avail_df, YOB_CANDIDATES)
     avail_gender_col = find_col(avail_df, GENDER_CANDIDATES)
-
-    print(f"DEBUG: best_yob_col = {best_yob_col}, avail_yob_col = {avail_yob_col}")
 
     if not (best_full_name_col or (best_first_name_col and best_last_name_col)):
         raise ValueError(
