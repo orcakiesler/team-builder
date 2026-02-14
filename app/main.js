@@ -1,12 +1,18 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 
 let mainWindow;
 const backendDir = path.resolve(__dirname, '..', 'backend');
 
+// Prefer AppData DB when it exists (has swimmers + meets); else use project DB (dev).
 function getDbPath() {
-  return path.join(app.getPath('userData'), 'swimmers.db');
+  const appDataDb = path.join(app.getPath('appData'), 'relay-team-builder', 'swimmers.db');
+  if (fs.existsSync(appDataDb)) return appDataDb;
+  const projectDb = path.join(backendDir, 'relay_swimmers.db');
+  if (fs.existsSync(projectDb)) return projectDb;
+  return appDataDb; // use as default for new installs
 }
 
 function createWindow() {
@@ -48,11 +54,13 @@ ipcMain.handle('select-file', async (_, { which }) => {
   return result.filePaths[0];
 });
 
+const STDIN_COMMANDS = ['update-swimmer', 'delete-swimmers', 'add-competition', 'delete-competitions'];
+
 ipcMain.handle('run-backend', async (_, options) => {
   const dbPath = options.dbPath || getDbPath();
   const command = options.command;
   const isWin = process.platform === 'win32';
-  const useStdin = command === 'update-swimmer';
+  const useStdin = STDIN_COMMANDS.includes(command) && options.payload != null;
 
   const args = ['run', 'python', 'app_entry.py', '--db', dbPath, '--command', command];
   if (command === 'import-files' && options.bestTimesPath && options.namesRelaysPath) {
@@ -77,7 +85,7 @@ ipcMain.handle('run-backend', async (_, options) => {
     child.stdout.on('data', (d) => { stdout += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
 
-    if (useStdin && options.payload != null) {
+    if (useStdin) {
       child.stdin.write(JSON.stringify(options.payload), (err) => {
         if (err) reject(err);
         else child.stdin.end();

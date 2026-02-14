@@ -12,6 +12,20 @@
     <p class="subtitle">Build your best relay teams, modify swimmers in the database, or import from Excel.</p>
   </header>
 
+  <section class="competitions-box">
+    <div class="meet-selector">
+      <span class="meet-selector-label">Current meet</span>
+      <button type="button" class="meet-dropdown-trigger" id="meet-dropdown-trigger" title="Select a meet">Select a meet</button>
+      <div class="meet-dropdown-panel hidden" id="meet-dropdown-panel">
+        <div class="meet-dropdown-list" id="meet-dropdown-list"></div>
+        <div class="meet-dropdown-actions">
+          <button type="button" class="btn btn-danger btn-sm hidden" id="remove-selected-competitions-btn">Remove selected</button>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="btn-add" id="add-competition-btn" title="Add competition">+</button>
+  </section>
+
   <section class="upload-section">
     <div class="file-cards">
       <div class="file-card" data-file="best_times" id="card-best-times">
@@ -25,11 +39,11 @@
         <input type="hidden" id="path-names-relays" />
       </div>
     </div>
-    <div class="action-buttons">
+    <div class="action-row">
       <button type="button" class="btn btn-secondary" id="import-btn" disabled>Import from files</button>
-      <button type="button" class="btn btn-primary" id="run-btn">Build teams</button>
+      <button type="button" class="run-btn btn-primary" id="run-btn">Build teams</button>
     </div>
-    <p class="run-hint" id="run-hint">Import Excel files to add/update swimmers, or build teams from the database.</p>
+    <p class="run-hint" id="run-hint">Import Excel files to add/update swimmers. Build teams uses the database.</p>
   </section>
 
   <section class="results-section" id="results-section">
@@ -40,6 +54,11 @@
       </div>
       <div class="panel swimmers-panel">
         <h2>Swimmers</h2>
+        <div class="swimmers-toolbar">
+          <button type="button" class="btn btn-secondary btn-sm" id="select-mode-btn">Select</button>
+          <button type="button" class="btn btn-secondary btn-sm hidden" id="select-all-swimmers-btn">Select all</button>
+          <button type="button" class="btn btn-danger btn-sm hidden" id="remove-selected-btn">Remove selected</button>
+        </div>
         <div class="swimmers-list" id="swimmers-list"></div>
       </div>
     </div>
@@ -70,6 +89,39 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" id="edit-cancel-btn">Cancel</button>
         <button type="button" class="btn btn-primary" id="edit-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="add-competition-modal-overlay">
+    <div class="modal" id="add-competition-modal">
+      <div class="modal-header">
+        <h3>Add competition</h3>
+        <button type="button" class="modal-close" id="add-competition-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="add-competition-form">
+          <div class="form-group">
+            <label for="comp-name">Name</label>
+            <input type="text" id="comp-name" required placeholder="e.g. Regional Champs" />
+          </div>
+          <div class="form-group">
+            <label for="comp-start">Start date</label>
+            <input type="date" id="comp-start" required />
+          </div>
+          <div class="form-group">
+            <label for="comp-end">End date</label>
+            <input type="date" id="comp-end" required />
+          </div>
+          <div class="form-group">
+            <label for="comp-location">Location</label>
+            <input type="text" id="comp-location" placeholder="e.g. City Pool" />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="add-competition-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="add-competition-save">Add</button>
       </div>
     </div>
   </div>

@@ -10,6 +10,7 @@ const runHint = document.getElementById('run-hint');
 const resultsSection = document.getElementById('results-section');
 const teamsContainer = document.getElementById('teams-container');
 const swimmersList = document.getElementById('swimmers-list');
+const removeSelectedBtn = document.getElementById('remove-selected-btn');
 const loadingEl = document.getElementById('loading');
 const modalOverlay = document.getElementById('swimmer-modal-overlay');
 const modal = document.getElementById('swimmer-modal');
@@ -17,17 +18,89 @@ const modalName = document.getElementById('modal-swimmer-name');
 const modalBody = document.getElementById('modal-body');
 const modalFooter = document.getElementById('modal-footer');
 const modalClose = document.getElementById('modal-close');
-const modalEditBtn = document.getElementById('modal-edit-btn');
-const editModalOverlay = document.getElementById('edit-modal-overlay');
-const editModalClose = document.getElementById('edit-modal-close');
-const editSwimmerForm = document.getElementById('edit-swimmer-form');
-const editCancelBtn = document.getElementById('edit-cancel-btn');
-const editSaveBtn = document.getElementById('edit-save-btn');
+const meetDropdownTrigger = document.getElementById('meet-dropdown-trigger');
+const meetDropdownPanel = document.getElementById('meet-dropdown-panel');
+const meetDropdownList = document.getElementById('meet-dropdown-list');
+const removeSelectedCompetitionsBtn = document.getElementById('remove-selected-competitions-btn');
+const selectModeBtn = document.getElementById('select-mode-btn');
+const selectAllSwimmersBtn = document.getElementById('select-all-swimmers-btn');
+const addCompetitionBtn = document.getElementById('add-competition-btn');
+const addCompetitionModal = document.getElementById('add-competition-modal-overlay');
+const addCompetitionClose = document.getElementById('add-competition-close');
+const addCompetitionForm = document.getElementById('add-competition-form');
+const addCompetitionCancel = document.getElementById('add-competition-cancel');
+const addCompetitionSave = document.getElementById('add-competition-save');
+
+const STORAGE_LAST_MEET = 'relay_last_meet_id';
+const STORAGE_LAST_TEAMS = 'relay_last_teams';
 
 let dbPath = null;
 let currentSwimmers = [];
+let currentCompetitions = [];
+let selectedMeetId = null;
 let lastTeamsResult = null;
-let swimmerBeingEdited = null;
+let swimmerSelectMode = false;
+
+function getLastMeetId() {
+  try {
+    const v = localStorage.getItem(STORAGE_LAST_MEET);
+    return v != null ? parseInt(v, 10) : null;
+  } catch (_) { return null; }
+}
+function setLastMeetId(id) {
+  try {
+    if (id != null) localStorage.setItem(STORAGE_LAST_MEET, String(id));
+    else localStorage.removeItem(STORAGE_LAST_MEET);
+  } catch (_) {}
+}
+function getLastTeamsByMeet() {
+  try {
+    const raw = localStorage.getItem(STORAGE_LAST_TEAMS);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) { return {}; }
+}
+function setLastTeamsForMeet(meetId, data) {
+  if (meetId == null) return;
+  const byMeet = getLastTeamsByMeet();
+  byMeet[meetId] = { teams: data.teams, swimmers: data.swimmers, reference_year: data.reference_year };
+  try {
+    localStorage.setItem(STORAGE_LAST_TEAMS, JSON.stringify(byMeet));
+  } catch (_) {}
+}
+async function applyLastTeamsForMeet(meetId) {
+  if (meetId == null) return;
+  const byMeet = getLastTeamsByMeet();
+  const saved = byMeet[meetId];
+  if (saved && saved.teams) {
+    lastTeamsResult = saved;
+    renderTeams(saved.teams);
+    renderSwimmers(saved.swimmers || []);
+    resultsSection.classList.remove('hidden');
+  } else {
+    lastTeamsResult = null;
+    renderTeams(null);
+    try {
+      await ensureDbPath();
+      const data = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath });
+      currentSwimmers = data.swimmers || [];
+      renderSwimmers(currentSwimmers);
+    } catch (_) {
+      currentSwimmers = [];
+      renderSwimmers([]);
+    }
+    resultsSection.classList.remove('hidden');
+  }
+}
+async function restoreLastMeetAndTeams() {
+  const lastId = getLastMeetId();
+  if (lastId != null && !isNaN(lastId) && currentCompetitions.some((c) => c.id === lastId)) {
+    selectedMeetId = lastId;
+    updateMeetTriggerText();
+  }
+  if (selectedMeetId != null) {
+    await applyLastTeamsForMeet(selectedMeetId);
+  }
+}
 
 async function ensureDbPath() {
   if (!dbPath) dbPath = await window.electronAPI.getDbPath();
@@ -35,13 +108,14 @@ async function ensureDbPath() {
 }
 
 function getPaths() {
-  const best = (pathBestTimes.value || '').trim();
-  const names = (pathNamesRelays.value || '').trim();
-  return { bestTimesPath: best || null, namesRelaysPath: names || null };
+  return {
+    bestTimesPath: (pathBestTimes.value || '').trim() || null,
+    namesRelaysPath: (pathNamesRelays.value || '').trim() || null,
+  };
 }
 
-function setLoading(msg = 'Loading…') {
-  loadingEl.textContent = msg;
+function setLoading(msg) {
+  loadingEl.textContent = msg || 'Loading…';
   loadingEl.classList.remove('hidden');
 }
 
@@ -76,20 +150,14 @@ async function onCardClick(which) {
 
 function setupDrop(card, which) {
   card.addEventListener('click', () => onCardClick(which));
-  card.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    card.classList.add('drag-over');
-  });
+  card.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); card.classList.add('drag-over'); });
   card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
   card.addEventListener('drop', (e) => {
     e.preventDefault();
     e.stopPropagation();
     card.classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
-    if (file && /\.(xlsx|xls)$/i.test(file.name)) {
-      setFile(which, file.path);
-    }
+    if (file && /\.(xlsx|xls)$/i.test(file.name)) setFile(which, file.path);
   });
 }
 
@@ -99,8 +167,23 @@ setupDrop(cardNamesRelays, 'names_relays');
 function formatTime(sec) {
   if (sec == null) return '–';
   const s = Number(sec);
+  return isNaN(s) ? '–' : `${s.toFixed(2)}s`;
+}
+
+function formatTimeMMSS(sec) {
+  if (sec == null) return '–';
+  const s = Number(sec);
   if (isNaN(s)) return '–';
-  return `${s.toFixed(2)}s`;
+  const min = Math.floor(s / 60);
+  const remainder = s % 60;
+  return `${min}:${remainder.toFixed(2).padStart(5, '0')}`;
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
 }
 
 /** Total time as minutes:seconds.hundredths (e.g. 2:03.45) */
@@ -121,7 +204,10 @@ function escapeHtml(s) {
 }
 
 function renderTeams(teamsByEvent) {
-  const strokeLabels = ['Backstroke', 'Breaststroke', 'Butterfly', 'Freestyle'];
+  if (!teamsByEvent || !Object.keys(teamsByEvent).length) {
+    teamsContainer.innerHTML = '<p class="text-muted">Build teams to see results.</p>';
+    return;
+  }
   if (!teamsByEvent || Object.keys(teamsByEvent).length === 0) {
     teamsContainer.innerHTML = '<p class="text-muted">Build teams to see results.</p>';
     return;
@@ -140,35 +226,104 @@ function renderTeams(teamsByEvent) {
         const strokeTimes = ['backstroke_50', 'breaststroke_50', 'butterfly_50', 'freestyle_50'];
         team.swimmers.forEach((s, i) => {
           const time = s[strokeTimes[i]];
-          html += `<li><span class="stroke-label">${team.stroke_labels[i]}:</span>${escapeHtml(s.full_name)} <span class="swimmer-time">(${formatTime(time)})</span></li>`;
+          const ageStr = s.age != null ? `, ${s.age}` : '';
+          html += `<li><span class="stroke-label">${team.stroke_labels[i]}:</span>${escapeHtml(s.full_name)}${ageStr} <span class="swimmer-time">(${formatTime(time)})</span></li>`;
         });
       } else {
         team.swimmers.forEach((s) => {
-          html += `<li>${escapeHtml(s.full_name)} <span class="swimmer-time">(${formatTime(s.freestyle_50)})</span></li>`;
+          const ageStr = s.age != null ? `, ${s.age}` : '';
+          html += `<li>${escapeHtml(s.full_name)}${ageStr} <span class="swimmer-time">(${formatTime(s.freestyle_50)})</span> <span class="swimmer-time">(${formatTime(s.freestyle_50)})</span></li>`;
         });
       }
       html += `</ul></div>`;
     }
     html += `</div>`;
   }
-  teamsContainer.innerHTML = html || '<p class="text-muted">No teams built.</p>';
+  teamsContainer.innerHTML = html;
+}
+
+function getSelectedSwimmerIds() {
+  const checkboxes = swimmersList.querySelectorAll('.swimmer-row input[type="checkbox"]:checked');
+  return Array.from(checkboxes).map((cb) => parseInt(cb.value, 10)).filter((n) => !isNaN(n));
+}
+
+function getSelectedCompetitionIds() {
+  const checkboxes = meetDropdownList.querySelectorAll('input.competition-cb:checked');
+  return Array.from(checkboxes).map((cb) => parseInt(cb.value, 10)).filter((n) => !isNaN(n));
+}
+
+function updateRemoveButtonVisibility() {
+  const ids = getSelectedSwimmerIds();
+  if (ids.length > 0) {
+    removeSelectedBtn.classList.remove('hidden');
+  } else {
+    removeSelectedBtn.classList.add('hidden');
+  }
+  updateSelectAllButtonLabel();
+}
+
+function updateSelectAllButtonLabel() {
+  if (!swimmerSelectMode || !currentSwimmers.length) return;
+  const checkboxes = swimmersList.querySelectorAll('input.swimmer-cb');
+  const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every((cb) => cb.checked);
+  selectAllSwimmersBtn.textContent = allChecked ? 'Unselect all' : 'Select all';
+}
+
+function updateRemoveCompetitionsButtonVisibility() {
+  const ids = getSelectedCompetitionIds();
+  if (ids.length > 0) {
+    removeSelectedCompetitionsBtn.classList.remove('hidden');
+  } else {
+    removeSelectedCompetitionsBtn.classList.add('hidden');
+  }
 }
 
 function renderSwimmers(swimmers) {
-  if (!swimmers || swimmers.length === 0) {
-    swimmersList.innerHTML = '<p class="text-muted">No swimmers in database. Import from Excel files.</p>';
+  currentSwimmers = swimmers || [];
+  if (!currentSwimmers.length) {
+    swimmersList.innerHTML = '<p class="text-muted">No swimmers. Import from Excel files.</p>';
+    removeSelectedBtn.classList.add('hidden');
+    selectAllSwimmersBtn.classList.add('hidden');
     return;
   }
-  swimmersList.innerHTML = swimmers
-    .map((s, index) => `<div class="swimmer-item" data-index="${index}">${escapeHtml(s.full_name)}</div>`)
-    .join('');
-
-  swimmersList.querySelectorAll('.swimmer-item').forEach((el) => {
-    el.addEventListener('click', () => {
-      const index = parseInt(el.getAttribute('data-index'), 10);
-      openSwimmerModal(swimmers[index]);
+  if (swimmerSelectMode) {
+    swimmersList.innerHTML = currentSwimmers
+      .map(
+        (s, index) =>
+          `<div class="swimmer-row" data-index="${index}">
+            <input type="checkbox" value="${s.id ?? ''}" class="swimmer-cb" />
+            <span class="swimmer-name">${escapeHtml(s.full_name)}</span>
+          </div>`
+      )
+      .join('');
+    swimmersList.querySelectorAll('input.swimmer-cb').forEach((cb) => {
+      cb.addEventListener('change', updateRemoveButtonVisibility);
+    });
+  } else {
+    swimmersList.innerHTML = currentSwimmers
+      .map(
+        (s, index) =>
+          `<div class="swimmer-row swimmer-row-no-cb" data-index="${index}">
+            <span class="swimmer-name">${escapeHtml(s.full_name)}</span>
+          </div>`
+      )
+      .join('');
+  }
+  swimmersList.querySelectorAll('.swimmer-row').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.classList.contains('swimmer-cb')) return;
+      const index = parseInt(row.getAttribute('data-index'), 10);
+      openSwimmerModal(currentSwimmers[index]);
     });
   });
+  if (swimmerSelectMode) {
+    selectAllSwimmersBtn.classList.remove('hidden');
+    updateRemoveButtonVisibility();
+    updateSelectAllButtonLabel();
+  } else {
+    selectAllSwimmersBtn.classList.add('hidden');
+    removeSelectedBtn.classList.add('hidden');
+  }
 }
 
 function openSwimmerModal(s) {
@@ -203,129 +358,8 @@ modalClose.addEventListener('click', () => {
   swimmerBeingEdited = null;
 });
 modalOverlay.addEventListener('click', (e) => {
-  if (e.target === modalOverlay) {
-    modalOverlay.classList.add('hidden');
-    swimmerBeingEdited = null;
-  }
+  if (e.target === modalOverlay) modalOverlay.classList.add('hidden');
 });
-
-modalEditBtn.addEventListener('click', () => {
-  if (!swimmerBeingEdited) return;
-  openEditModal(swimmerBeingEdited);
-});
-
-function openEditModal(s) {
-  const avail = s.availability || {};
-  const availabilityKeys = Object.keys(avail);
-  let availHtml = '';
-  if (availabilityKeys.length) {
-    availHtml = '<div class="form-group"><label>Availability</label><div class="availability-checkboxes">';
-    for (const k of availabilityKeys) {
-      const checked = avail[k] ? ' checked' : '';
-      availHtml += `<label><input type="checkbox" name="avail_${escapeHtml(k)}" data-key="${escapeHtml(k)}"${checked}> ${escapeHtml(k)}</label>`;
-    }
-    availHtml += '</div></div>';
-  }
-
-  editSwimmerForm.innerHTML = `
-    <input type="hidden" name="id" value="${s.id ?? ''}">
-    <div class="form-group">
-      <label>First name</label>
-      <input type="text" name="first_name" value="${escapeHtml(s.first_name ?? '')}">
-    </div>
-    <div class="form-group">
-      <label>Last name</label>
-      <input type="text" name="last_name" value="${escapeHtml(s.last_name ?? '')}">
-    </div>
-    <div class="form-group">
-      <label>Gender</label>
-      <input type="text" name="gender" value="${escapeHtml(s.gender ?? '')}" placeholder="e.g. M / F">
-    </div>
-    <div class="form-group">
-      <label>Year of birth</label>
-      <input type="number" name="year_of_birth" value="${s.year_of_birth ?? ''}" placeholder="e.g. 2010" min="1900" max="2030">
-    </div>
-    <div class="form-group">
-      <label>50 Free (seconds)</label>
-      <input type="number" name="freestyle_50" step="0.01" value="${s.freestyle_50 ?? ''}" placeholder="e.g. 28.50">
-    </div>
-    <div class="form-group">
-      <label>50 Back (seconds)</label>
-      <input type="number" name="backstroke_50" step="0.01" value="${s.backstroke_50 ?? ''}">
-    </div>
-    <div class="form-group">
-      <label>50 Breast (seconds)</label>
-      <input type="number" name="breaststroke_50" step="0.01" value="${s.breaststroke_50 ?? ''}">
-    </div>
-    <div class="form-group">
-      <label>50 Fly (seconds)</label>
-      <input type="number" name="butterfly_50" step="0.01" value="${s.butterfly_50 ?? ''}">
-    </div>
-    ${availHtml}
-  `;
-  editModalOverlay.classList.remove('hidden');
-}
-
-function closeEditModal() {
-  editModalOverlay.classList.add('hidden');
-}
-
-editModalClose.addEventListener('click', closeEditModal);
-editCancelBtn.addEventListener('click', closeEditModal);
-editModalOverlay.addEventListener('click', (e) => {
-  if (e.target === editModalOverlay) closeEditModal();
-});
-
-editSaveBtn.addEventListener('click', async () => {
-  const id = editSwimmerForm.querySelector('input[name="id"]').value;
-  if (!id) return;
-  const payload = {
-    id: parseInt(id, 10),
-    first_name: editSwimmerForm.querySelector('input[name="first_name"]').value.trim(),
-    last_name: editSwimmerForm.querySelector('input[name="last_name"]').value.trim(),
-    gender: editSwimmerForm.querySelector('input[name="gender"]').value.trim() || null,
-    year_of_birth: (() => {
-      const v = editSwimmerForm.querySelector('input[name="year_of_birth"]').value.trim();
-      return v ? parseInt(v, 10) : null;
-    })(),
-    freestyle_50: parseFloatOrNull(editSwimmerForm.querySelector('input[name="freestyle_50"]').value),
-    backstroke_50: parseFloatOrNull(editSwimmerForm.querySelector('input[name="backstroke_50"]').value),
-    breaststroke_50: parseFloatOrNull(editSwimmerForm.querySelector('input[name="breaststroke_50"]').value),
-    butterfly_50: parseFloatOrNull(editSwimmerForm.querySelector('input[name="butterfly_50"]').value),
-  };
-  const availability = {};
-  editSwimmerForm.querySelectorAll('input[type="checkbox"][data-key]').forEach((cb) => {
-    availability[cb.getAttribute('data-key')] = cb.checked;
-  });
-  payload.availability = availability;
-
-  setLoading('Saving…');
-  try {
-    await ensureDbPath();
-    const result = await window.electronAPI.runBackend({
-      command: 'update-swimmer',
-      dbPath,
-      payload,
-    });
-    if (result.swimmer) {
-      const idx = currentSwimmers.findIndex((s) => s.id === result.swimmer.id);
-      if (idx !== -1) currentSwimmers[idx] = result.swimmer;
-      renderSwimmers(currentSwimmers);
-    }
-    closeEditModal();
-    modalOverlay.classList.add('hidden');
-  } catch (err) {
-    alert('Error: ' + (err.message || String(err)));
-  } finally {
-    clearLoading();
-  }
-});
-
-function parseFloatOrNull(val) {
-  if (val == null || String(val).trim() === '') return null;
-  const n = parseFloat(val);
-  return isNaN(n) ? null : n;
-}
 
 async function loadSwimmers() {
   setLoading('Loading swimmers…');
@@ -343,10 +377,83 @@ async function loadSwimmers() {
   }
 }
 
+async function loadCompetitions() {
+  try {
+    await ensureDbPath();
+    const data = await window.electronAPI.runBackend({ command: 'list-competitions', dbPath });
+    renderCompetitions(data.competitions || []);
+    await restoreLastMeetAndTeams();
+  } catch (err) {
+    renderCompetitions([]);
+    runHint.textContent = (runHint.textContent ? runHint.textContent + ' ' : '') + ('Could not load meets: ' + (err.message || String(err)));
+  }
+}
+
+function updateMeetTriggerText() {
+  const selected = currentCompetitions.find((c) => c.id === selectedMeetId);
+  meetDropdownTrigger.textContent = selected ? selected.name : 'Select a meet';
+}
+
+function closeMeetDropdown() {
+  meetDropdownPanel.classList.add('hidden');
+}
+
+function renderCompetitions(competitions) {
+  currentCompetitions = competitions || [];
+  if (!currentCompetitions.length) {
+    meetDropdownList.innerHTML = '';
+    meetDropdownTrigger.textContent = 'Select a meet';
+    selectedMeetId = null;
+    removeSelectedCompetitionsBtn.classList.add('hidden');
+    return;
+  }
+  meetDropdownList.innerHTML = currentCompetitions
+    .map(
+      (c) =>
+        `<div class="meet-dropdown-item" data-id="${c.id}">
+          <input type="checkbox" value="${c.id}" class="competition-cb" />
+          <div class="meet-dropdown-item-content">
+            <span class="comp-name">${escapeHtml(c.name)}</span>
+            <span class="comp-dates">${escapeHtml(c.start_date)} – ${escapeHtml(c.end_date)}</span>
+            <span class="comp-location">${escapeHtml(c.location)}</span>
+          </div>
+        </div>`
+    )
+    .join('');
+
+  meetDropdownList.querySelectorAll('input.competition-cb').forEach((cb) => {
+    cb.addEventListener('change', (e) => { e.stopPropagation(); updateRemoveCompetitionsButtonVisibility(); });
+  });
+  meetDropdownList.querySelectorAll('.meet-dropdown-item').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.type === 'checkbox') return;
+      selectedMeetId = parseInt(row.getAttribute('data-id'), 10);
+      setLastMeetId(selectedMeetId);
+      updateMeetTriggerText();
+      closeMeetDropdown();
+      applyLastTeamsForMeet(selectedMeetId); // async, no await needed
+    });
+  });
+  if (!currentCompetitions.some((c) => c.id === selectedMeetId)) {
+    selectedMeetId = null;
+  }
+  updateMeetTriggerText();
+  updateRemoveCompetitionsButtonVisibility();
+}
+
+meetDropdownTrigger.addEventListener('click', (e) => {
+  e.stopPropagation();
+  meetDropdownPanel.classList.toggle('hidden');
+});
+document.addEventListener('click', () => {
+  if (!meetDropdownPanel.classList.contains('hidden')) closeMeetDropdown();
+});
+meetDropdownPanel.addEventListener('click', (e) => e.stopPropagation());
+
 importBtn.addEventListener('click', async () => {
   const { bestTimesPath, namesRelaysPath } = getPaths();
   if (!bestTimesPath || !namesRelaysPath) return;
-  setLoading('Importing from files…');
+  setLoading('Importing…');
   importBtn.disabled = true;
   try {
     await ensureDbPath();
@@ -356,11 +463,8 @@ importBtn.addEventListener('click', async () => {
       bestTimesPath,
       namesRelaysPath,
     });
-    currentSwimmers = data.swimmers || [];
-    renderSwimmers(currentSwimmers);
-    const added = data.imported ?? 0;
-    const updated = data.updated ?? 0;
-    alert(`Import done. Added: ${added}, updated: ${updated}.`);
+    renderSwimmers(data.swimmers);
+    alert(`Imported: ${data.imported || 0} added, ${data.updated || 0} updated.`);
   } catch (err) {
     alert('Error: ' + (err.message || String(err)));
   } finally {
@@ -376,10 +480,13 @@ runBtn.addEventListener('click', async () => {
     await ensureDbPath();
     const data = await window.electronAPI.runBackend({ command: 'build-teams', dbPath });
     lastTeamsResult = data;
-    currentSwimmers = data.swimmers || [];
     renderTeams(data.teams);
     renderSwimmers(currentSwimmers);
     resultsSection.classList.remove('hidden');
+    if (selectedMeetId != null) {
+      setLastTeamsForMeet(selectedMeetId, data);
+      setLastMeetId(selectedMeetId);
+    }
   } catch (err) {
     alert('Error: ' + (err.message || String(err)));
   } finally {
@@ -388,5 +495,110 @@ runBtn.addEventListener('click', async () => {
   }
 });
 
+selectModeBtn.addEventListener('click', () => {
+  swimmerSelectMode = !swimmerSelectMode;
+  selectModeBtn.textContent = swimmerSelectMode ? 'Done' : 'Select';
+  renderSwimmers(currentSwimmers);
+  if (swimmerSelectMode) {
+    updateSelectAllButtonLabel();
+  }
+});
+
+selectAllSwimmersBtn.addEventListener('click', () => {
+  const checkboxes = swimmersList.querySelectorAll('input.swimmer-cb');
+  const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every((cb) => cb.checked);
+  checkboxes.forEach((cb) => { cb.checked = !allChecked; });
+  updateRemoveButtonVisibility();
+});
+
+removeSelectedBtn.addEventListener('click', async () => {
+  const ids = getSelectedSwimmerIds();
+  if (!ids.length) return;
+  if (!confirm(`Remove ${ids.length} selected swimmer(s)?`)) return;
+  setLoading('Removing…');
+  try {
+    await ensureDbPath();
+    const data = await window.electronAPI.runBackend({
+      command: 'delete-swimmers',
+      dbPath,
+      payload: { ids },
+    });
+    renderSwimmers(data.swimmers);
+  } catch (err) {
+    alert('Error: ' + (err.message || String(err)));
+  } finally {
+    clearLoading();
+  }
+});
+
+removeSelectedCompetitionsBtn.addEventListener('click', async () => {
+  const ids = getSelectedCompetitionIds();
+  if (!ids.length) return;
+  if (!confirm(`Remove ${ids.length} selected competition(s)?`)) return;
+  setLoading('Removing…');
+  try {
+    await ensureDbPath();
+    const data = await window.electronAPI.runBackend({
+      command: 'delete-competitions',
+      dbPath,
+      payload: { ids },
+    });
+    if (ids.includes(selectedMeetId)) selectedMeetId = null;
+    closeMeetDropdown();
+    renderCompetitions(data.competitions);
+  } catch (err) {
+    alert('Error: ' + (err.message || String(err)));
+  } finally {
+    clearLoading();
+  }
+});
+
+addCompetitionBtn.addEventListener('click', () => {
+  addCompetitionForm.reset();
+  document.getElementById('comp-location').value = '';
+  addCompetitionModal.classList.remove('hidden');
+});
+
+function closeAddCompetitionModal() {
+  addCompetitionModal.classList.add('hidden');
+}
+
+addCompetitionClose.addEventListener('click', closeAddCompetitionModal);
+addCompetitionCancel.addEventListener('click', closeAddCompetitionModal);
+addCompetitionModal.addEventListener('click', (e) => {
+  if (e.target === addCompetitionModal) closeAddCompetitionModal();
+});
+
+addCompetitionSave.addEventListener('click', async () => {
+  const name = document.getElementById('comp-name').value.trim();
+  const start = document.getElementById('comp-start').value;
+  const end = document.getElementById('comp-end').value;
+  const location = document.getElementById('comp-location').value.trim() || '';
+  if (!name || !start || !end) {
+    alert('Please fill in name, start date, and end date.');
+    return;
+  }
+  setLoading('Adding competition…');
+  try {
+    await ensureDbPath();
+    const data = await window.electronAPI.runBackend({
+      command: 'add-competition',
+      dbPath,
+      payload: { name, start_date: start, end_date: end, location },
+    });
+    renderCompetitions(data.competitions);
+    closeAddCompetitionModal();
+  } catch (err) {
+    alert('Error: ' + (err.message || String(err)));
+  } finally {
+    clearLoading();
+  }
+});
+
 updateImportButton();
-loadSwimmers();
+
+(async function init() {
+  await ensureDbPath();
+  await loadSwimmers();
+  await loadCompetitions();
+})();
