@@ -93,6 +93,8 @@ def run(best_times_path: str, names_relays_path: str, reference_year: int | None
 
     people = load_people(best, names)
     reference_year = reference_year or date.today().year
+    people = _people_from_db(db_path)
+    swimmers_with_id = relay_db.load_all(db_path)
     teams_by_event = {}
     for event_name, filter_func, build_func, is_medley in EVENT_CONFIGS:
         available = filter_func(people)
@@ -110,7 +112,7 @@ def run(best_times_path: str, names_relays_path: str, reference_year: int | None
             })
     return {
         "reference_year": reference_year,
-        "swimmers": [_person_to_dict(p) for p in people],
+        "swimmers": swimmers_with_id,
         "teams": teams_by_event,
     }
 
@@ -227,6 +229,86 @@ def cmd_delete_competitions(db_path: Path, payload: dict) -> dict:
     relay_db.ensure_database(db_path)
     relay_db.delete_competitions(db_path, [int(i) for i in ids])
     return {"competitions": relay_db.load_competitions(db_path)}
+
+
+def cmd_import_files(db_path: Path, best_times_path: str, names_relays_path: str) -> dict:
+    best = Path(best_times_path)
+    names = Path(names_relays_path)
+    if not best.is_file():
+        raise FileNotFoundError(f"File not found: {best}")
+    if not names.is_file():
+        raise FileNotFoundError(f"File not found: {names}")
+
+    relay_db.ensure_database(db_path)
+    people_from_files = load_people(best, names)
+    existing = relay_db.load_all(db_path)
+    name_to_id = {}
+    for row in existing:
+        key = (str(row.get("first_name") or "").strip().lower(), str(row.get("last_name") or "").strip().lower())
+        name_to_id[key] = row["id"]
+
+    added = 0
+    updated = 0
+    for p in people_from_files:
+        key = (p.first_name.strip().lower(), p.last_name.strip().lower())
+        if key in name_to_id:
+            relay_db.update_swimmer(
+                db_path,
+                name_to_id[key],
+                first_name=p.first_name,
+                last_name=p.last_name,
+                gender=p.gender,
+                year_of_birth=p.year_of_birth,
+                freestyle_50=p.freestyle_50,
+                backstroke_50=p.backstroke_50,
+                breaststroke_50=p.breaststroke_50,
+                butterfly_50=p.butterfly_50,
+                availability=p.availability,
+            )
+            updated += 1
+        else:
+            new_id = relay_db.insert_one(db_path, p)
+            name_to_id[key] = new_id
+            added += 1
+
+    swimmers = relay_db.load_all(db_path)
+    return {
+        "swimmers": swimmers,
+        "imported": added,
+        "updated": updated,
+    }
+
+
+def cmd_update_swimmer(db_path: Path, payload: dict) -> dict:
+    swimmer_id = payload.get("id")
+    if swimmer_id is None:
+        raise ValueError("Missing 'id' in update payload")
+    relay_db.ensure_database(db_path)
+
+    kwargs = {}
+    if "first_name" in payload:
+        kwargs["first_name"] = payload["first_name"]
+    if "last_name" in payload:
+        kwargs["last_name"] = payload["last_name"]
+    if "gender" in payload:
+        kwargs["gender"] = payload["gender"]
+    if "year_of_birth" in payload:
+        kwargs["year_of_birth"] = payload["year_of_birth"]
+    if "freestyle_50" in payload:
+        kwargs["freestyle_50"] = payload["freestyle_50"]
+    if "backstroke_50" in payload:
+        kwargs["backstroke_50"] = payload["backstroke_50"]
+    if "breaststroke_50" in payload:
+        kwargs["breaststroke_50"] = payload["breaststroke_50"]
+    if "butterfly_50" in payload:
+        kwargs["butterfly_50"] = payload["butterfly_50"]
+    if "availability" in payload:
+        kwargs["availability"] = payload["availability"]
+
+    relay_db.update_swimmer(db_path, int(swimmer_id), **kwargs)
+    updated = relay_db.load_all(db_path)
+    one = next((s for s in updated if s["id"] == int(swimmer_id)), None)
+    return {"swimmer": one} if one else {"swimmer": None}
 
 
 def main() -> None:

@@ -16,6 +16,7 @@ const modalOverlay = document.getElementById('swimmer-modal-overlay');
 const modal = document.getElementById('swimmer-modal');
 const modalName = document.getElementById('modal-swimmer-name');
 const modalBody = document.getElementById('modal-body');
+const modalFooter = document.getElementById('modal-footer');
 const modalClose = document.getElementById('modal-close');
 const meetDropdownTrigger = document.getElementById('meet-dropdown-trigger');
 const meetDropdownPanel = document.getElementById('meet-dropdown-panel');
@@ -185,8 +186,29 @@ function escapeHtml(s) {
   return div.innerHTML;
 }
 
+/** Total time as minutes:seconds.hundredths (e.g. 2:03.45) */
+function formatTimeMMSS(sec) {
+  if (sec == null) return '–';
+  const s = Number(sec);
+  if (isNaN(s)) return '–';
+  const min = Math.floor(s / 60);
+  const remainder = s % 60;
+  return `${min}:${remainder.toFixed(2).padStart(5, '0')}`;
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
 function renderTeams(teamsByEvent) {
   if (!teamsByEvent || !Object.keys(teamsByEvent).length) {
+    teamsContainer.innerHTML = '<p class="text-muted">Build teams to see results.</p>';
+    return;
+  }
+  if (!teamsByEvent || Object.keys(teamsByEvent).length === 0) {
     teamsContainer.innerHTML = '<p class="text-muted">Build teams to see results.</p>';
     return;
   }
@@ -205,12 +227,13 @@ function renderTeams(teamsByEvent) {
         team.swimmers.forEach((s, i) => {
           const time = s[strokeTimes[i]];
           const ageStr = s.age != null ? `, ${s.age}` : '';
-          html += `<li><span class="stroke-label">${team.stroke_labels[i]}:</span>${escapeHtml(s.full_name)}${ageStr} <span class="swimmer-time">(${formatTime(time)})</span></li>`;
+          const time = s[strokeTimes[i]];
+          html += `<li><span class="stroke-label">${team.stroke_labels[i]}:</span>${escapeHtml(s.full_name)}${ageStr} <span class="swimmer-time">(${formatTime(time)})</span> <span class="swimmer-time">(${formatTime(time)})</span></li>`;
         });
       } else {
         team.swimmers.forEach((s) => {
           const ageStr = s.age != null ? `, ${s.age}` : '';
-          html += `<li>${escapeHtml(s.full_name)}${ageStr} <span class="swimmer-time">(${formatTime(s.freestyle_50)})</span></li>`;
+          html += `<li>${escapeHtml(s.full_name)}${ageStr} <span class="swimmer-time">(${formatTime(s.freestyle_50)})</span> <span class="swimmer-time">(${formatTime(s.freestyle_50)})</span></li>`;
         });
       }
       html += `</ul></div>`;
@@ -326,10 +349,15 @@ function openSwimmerModal(s) {
       <dd><ul class="availability-list">${availList || '<li>–</li>'}</ul></dd>
     </dl>
   `;
+  modalFooter.classList.toggle('hidden', !s.id);
   modalOverlay.classList.remove('hidden');
+  swimmerBeingEdited = s;
 }
 
-modalClose.addEventListener('click', () => modalOverlay.classList.add('hidden'));
+modalClose.addEventListener('click', () => {
+  modalOverlay.classList.add('hidden');
+  swimmerBeingEdited = null;
+});
 modalOverlay.addEventListener('click', (e) => {
   if (e.target === modalOverlay) modalOverlay.classList.add('hidden');
 });
@@ -453,7 +481,7 @@ runBtn.addEventListener('click', async () => {
     const data = await window.electronAPI.runBackend({ command: 'build-teams', dbPath });
     lastTeamsResult = data;
     renderTeams(data.teams);
-    renderSwimmers(data.swimmers);
+    renderSwimmers(currentSwimmers);
     resultsSection.classList.remove('hidden');
     if (selectedMeetId != null) {
       setLastTeamsForMeet(selectedMeetId, data);
