@@ -227,8 +227,7 @@ function renderTeams(teamsByEvent) {
         team.swimmers.forEach((s, i) => {
           const time = s[strokeTimes[i]];
           const ageStr = s.age != null ? `, ${s.age}` : '';
-          const time = s[strokeTimes[i]];
-          html += `<li><span class="stroke-label">${team.stroke_labels[i]}:</span>${escapeHtml(s.full_name)}${ageStr} <span class="swimmer-time">(${formatTime(time)})</span> <span class="swimmer-time">(${formatTime(time)})</span></li>`;
+          html += `<li><span class="stroke-label">${team.stroke_labels[i]}:</span>${escapeHtml(s.full_name)}${ageStr} <span class="swimmer-time">(${formatTime(time)})</span></li>`;
         });
       } else {
         team.swimmers.forEach((s) => {
@@ -384,8 +383,9 @@ async function loadCompetitions() {
     const data = await window.electronAPI.runBackend({ command: 'list-competitions', dbPath });
     renderCompetitions(data.competitions || []);
     await restoreLastMeetAndTeams();
-  } catch (_) {
+  } catch (err) {
     renderCompetitions([]);
+    runHint.textContent = (runHint.textContent ? runHint.textContent + ' ' : '') + ('Could not load meets: ' + (err.message || String(err)));
   }
 }
 
@@ -596,5 +596,9 @@ addCompetitionSave.addEventListener('click', async () => {
 });
 
 updateImportButton();
-loadSwimmers();
-loadCompetitions();
+
+(async function init() {
+  await ensureDbPath();
+  await loadSwimmers();
+  await loadCompetitions();
+})();
