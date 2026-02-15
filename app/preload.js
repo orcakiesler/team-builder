@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectFile: (which) => ipcRenderer.invoke('select-file', { which }),
   runScript: (options) => ipcRenderer.invoke('run-script', options),
   runBackend: (options) => ipcRenderer.invoke('run-backend', options),
+  requestInitialSwimmers: () => ipcRenderer.invoke('request-initial-swimmers'),
 });

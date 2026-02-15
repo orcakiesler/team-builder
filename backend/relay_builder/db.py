@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import sqlite3
 from datetime import date
-from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
@@ -11,13 +10,23 @@ from .models import Person
 
 
 def ensure_database(db_path: str | Path) -> None:
-    """Create the database and tables if they do not exist."""
+    """Create the swimmers database if it does not exist and run migrations."""
     create_database(db_path)
+    _migrate_swimmers_medical(db_path)
 
 
-def ensure_database(db_path: str | Path) -> None:
-    """Create the swimmers database if it does not exist."""
-    create_database(db_path)
+def _migrate_swimmers_medical(db_path: str | Path) -> None:
+    """Add medical_date column to swimmers if it does not exist."""
+    path = Path(db_path)
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(swimmers)")
+        columns = [row[1] for row in cur.fetchall()]
+        if "medical_date" not in columns:
+            cur.execute("ALTER TABLE swimmers ADD COLUMN medical_date TEXT")
+        conn.commit()
 
 
 def create_database(db_path: str | Path) -> None:
@@ -41,7 +50,8 @@ def create_database(db_path: str | Path) -> None:
                 backstroke_50 REAL,
                 breaststroke_50 REAL,
                 butterfly_50 REAL,
-                availability_json TEXT NOT NULL
+                availability_json TEXT NOT NULL,
+                medical_date TEXT
             )
             """
         )
@@ -71,6 +81,7 @@ def _row_to_swimmer_dict(row: tuple) -> Dict[str, Any]:
         breaststroke_50,
         butterfly_50,
         availability_json,
+        medical_date,
     ) = row
     availability = json.loads(availability_json) if availability_json else {}
     full_name = f"{first_name or ''} {last_name or ''}".strip()
@@ -88,6 +99,7 @@ def _row_to_swimmer_dict(row: tuple) -> Dict[str, Any]:
         "breaststroke_50": breaststroke_50,
         "butterfly_50": butterfly_50,
         "availability": availability,
+        "medical_date": medical_date,
     }
 
 
@@ -102,7 +114,7 @@ def load_all(db_path: str | Path) -> List[Dict[str, Any]]:
             """
             SELECT id, first_name, last_name, gender, year_of_birth,
                    freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
-                   availability_json
+                   availability_json, medical_date
             FROM swimmers
             ORDER BY first_name, last_name
             """
@@ -120,9 +132,9 @@ def insert_one(db_path: str | Path, person: Person) -> int:
             INSERT INTO swimmers (
                 first_name, last_name, gender, year_of_birth,
                 freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
-                availability_json
+                availability_json, medical_date
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 person.first_name,
@@ -134,6 +146,7 @@ def insert_one(db_path: str | Path, person: Person) -> int:
                 person.breaststroke_50,
                 person.butterfly_50,
                 json.dumps(person.availability, ensure_ascii=False),
+                person.medical_date or None,
             ),
         )
         conn.commit()
@@ -232,6 +245,7 @@ def update_swimmer(
     breaststroke_50: float | None = None,
     butterfly_50: float | None = None,
     availability: Dict[str, bool] | None = None,
+    medical_date: str | None = None,
 ) -> None:
     """Update a single swimmer by id."""
     path = Path(db_path)
@@ -255,6 +269,8 @@ def update_swimmer(
         updates.append("butterfly_50 = ?"); args.append(butterfly_50)
     if availability is not None:
         updates.append("availability_json = ?"); args.append(json.dumps(availability, ensure_ascii=False))
+    if medical_date is not None:
+        updates.append("medical_date = ?"); args.append(medical_date or None)
     if not updates:
         return
     args.append(id_)
@@ -280,6 +296,7 @@ def insert_people(db_path: str | Path, people: Iterable[Person]) -> None:
                 p.breaststroke_50,
                 p.butterfly_50,
                 json.dumps(p.availability, ensure_ascii=False),
+                p.medical_date or None,
             )
             for p in people
         ]
@@ -294,95 +311,14 @@ def insert_people(db_path: str | Path, people: Iterable[Person]) -> None:
                 backstroke_50,
                 breaststroke_50,
                 butterfly_50,
-                availability_json
+                availability_json,
+                medical_date
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )
         conn.commit()
-
-
-def insert_one(db_path: str | Path, person: Person) -> int:
-    """Insert a single Person and return the new row id."""
-    path = Path(db_path)
-    with sqlite3.connect(path) as conn:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO swimmers (
-                first_name, last_name, gender, year_of_birth,
-                freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
-                availability_json
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                person.first_name,
-                person.last_name,
-                person.gender,
-                person.year_of_birth,
-                person.freestyle_50,
-                person.backstroke_50,
-                person.breaststroke_50,
-                person.butterfly_50,
-                json.dumps(person.availability, ensure_ascii=False),
-            ),
-        )
-        conn.commit()
-        return cur.lastrowid
-
-
-def _row_to_swimmer_dict(row: tuple) -> Dict[str, Any]:
-    """Convert a DB row (id, first_name, last_name, ...) to app-facing dict with id and availability."""
-    (
-        id_,
-        first_name,
-        last_name,
-        gender,
-        year_of_birth,
-        freestyle_50,
-        backstroke_50,
-        breaststroke_50,
-        butterfly_50,
-        availability_json,
-    ) = row
-    availability = json.loads(availability_json) if availability_json else {}
-    full_name = f"{first_name or ''} {last_name or ''}".strip()
-    age = (date.today().year - year_of_birth) if year_of_birth is not None else None
-    return {
-        "id": id_,
-        "first_name": first_name or "",
-        "last_name": last_name or "",
-        "full_name": full_name,
-        "gender": gender,
-        "year_of_birth": year_of_birth,
-        "age": age,
-        "freestyle_50": freestyle_50,
-        "backstroke_50": backstroke_50,
-        "breaststroke_50": breaststroke_50,
-        "butterfly_50": butterfly_50,
-        "availability": availability,
-    }
-
-
-def load_all(db_path: str | Path) -> List[Dict[str, Any]]:
-    """Load all swimmers from the database. Returns list of dicts with id and all Person fields."""
-    path = Path(db_path)
-    if not path.exists():
-        return []
-    with sqlite3.connect(path) as conn:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT id, first_name, last_name, gender, year_of_birth,
-                   freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
-                   availability_json
-            FROM swimmers
-            ORDER BY first_name, last_name
-            """
-        )
-        return [_row_to_swimmer_dict(row) for row in cur.fetchall()]
 
 
 def update_swimmer(
@@ -398,6 +334,7 @@ def update_swimmer(
     breaststroke_50: float | None = None,
     butterfly_50: float | None = None,
     availability: Dict[str, bool] | None = None,
+    medical_date: str | None = None,
 ) -> None:
     """Update a single swimmer by id. Only provided fields are updated."""
     path = Path(db_path)
@@ -430,6 +367,9 @@ def update_swimmer(
     if availability is not None:
         updates.append("availability_json = ?")
         args.append(json.dumps(availability, ensure_ascii=False))
+    if medical_date is not None:
+        updates.append("medical_date = ?")
+        args.append(medical_date or None)
     if not updates:
         return
     args.append(id_)

@@ -2,17 +2,42 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const initSqlJs = require('sql.js');
 
 let mainWindow;
 const backendDir = path.resolve(__dirname, '..', 'backend');
 
-// Prefer AppData DB when it exists (has swimmers + meets); else use project DB (dev).
+// Single persistent DB path - same path for dev and packaged so we never have two DBs.
+let resolvedDbPath = null;
+
 function getDbPath() {
-  const appDataDb = path.join(app.getPath('appData'), 'relay-team-builder', 'swimmers.db');
-  if (fs.existsSync(appDataDb)) return appDataDb;
-  const projectDb = path.join(backendDir, 'relay_swimmers.db');
-  if (fs.existsSync(projectDb)) return projectDb;
-  return appDataDb; // use as default for new installs
+  if (resolvedDbPath) return resolvedDbPath;
+  // Use fixed env-based path so it's identical whether run via "npm start" or packaged app.
+  const isWin = process.platform === 'win32';
+  const baseDir = isWin
+    ? path.join(process.env.APPDATA || process.env.LOCALAPPDATA || process.env.USERPROFILE || '.', 'relay-team-builder')
+    : path.join(process.env.HOME || '.', '.config', 'relay-team-builder');
+  const appDataDb = path.resolve(baseDir, 'swimmers.db');
+  const projectDb = path.resolve(backendDir, 'relay_swimmers.db');
+
+  try {
+    fs.mkdirSync(baseDir, { recursive: true });
+  } catch (_) {}
+
+  if (!fs.existsSync(appDataDb)) {
+    const oldElectronPath = path.join(app.getPath('appData'), 'relay-team-builder', 'swimmers.db');
+    if (fs.existsSync(oldElectronPath)) {
+      try {
+        fs.copyFileSync(oldElectronPath, appDataDb);
+      } catch (_) {}
+    } else if (fs.existsSync(projectDb)) {
+      try {
+        fs.copyFileSync(projectDb, appDataDb);
+      } catch (_) {}
+    }
+  }
+  resolvedDbPath = appDataDb;
+  return resolvedDbPath;
 }
 
 function createWindow() {
@@ -31,6 +56,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  getDbPath(); // Resolve and cache the single DB path before any renderer or backend use
   createWindow();
 });
 
@@ -54,27 +80,34 @@ ipcMain.handle('select-file', async (_, { which }) => {
   return result.filePaths[0];
 });
 
-const STDIN_COMMANDS = ['update-swimmer', 'delete-swimmers', 'add-competition', 'delete-competitions'];
+const STDIN_COMMANDS = ['update-swimmer', 'delete-swimmers', 'add-competition', 'delete-competitions', 'add-swimmer'];
 
-ipcMain.handle('run-backend', async (_, options) => {
-  const dbPath = options.dbPath || getDbPath();
+/** Run backend command; always uses main process DB path. */
+function runBackendCommand(options) {
+  const dbPath = getDbPath();
   const command = options.command;
   const isWin = process.platform === 'win32';
   const useStdin = STDIN_COMMANDS.includes(command) && options.payload != null;
+  const dbPathForBackend = path.resolve(dbPath).replace(/\\/g, '/');
 
-  const args = ['run', 'python', 'app_entry.py', '--db', dbPath, '--command', command];
-  if (command === 'import-files' && options.bestTimesPath && options.namesRelaysPath) {
-    args.push('--best-times', options.bestTimesPath, '--names-relays', options.namesRelaysPath);
+  const args = ['run', 'python', 'app_entry.py', '--db', dbPathForBackend, '--command', command];
+  if (command === 'import-files') {
+    if (options.bestTimesPath) args.push('--best-times', options.bestTimesPath);
+    if (options.namesRelaysPath) args.push('--names-relays', options.namesRelaysPath);
   }
   if (command === 'build-teams' && options.referenceYear != null) {
     args.push('--reference-year', String(options.referenceYear));
   }
+  if (command === 'build-teams' && options.meetStartDate) {
+    args.push('--meet-start-date', options.meetStartDate);
+  }
 
   return new Promise((resolve, reject) => {
     const stdio = useStdin ? ['pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'];
+    const env = { ...process.env, RELAY_DB_PATH: dbPathForBackend };
     const child = spawn('poetry', args, {
       cwd: backendDir,
-      env: process.env,
+      env,
       shell: isWin,
       stdio,
     });
@@ -106,4 +139,60 @@ ipcMain.handle('run-backend', async (_, options) => {
 
     child.on('error', (err) => reject(err));
   });
+}
+
+ipcMain.handle('run-backend', async (_, options) => runBackendCommand(options));
+
+// Load swimmers by reading the DB file directly in main (same path we write to; no backend timing).
+async function loadSwimmersFromDb() {
+  const dbPath = getDbPath();
+  if (!fs.existsSync(dbPath)) return [];
+  const SQL = await initSqlJs();
+  const fileBuffer = fs.readFileSync(dbPath);
+  const db = new SQL.Database(fileBuffer);
+  try {
+    const result = db.exec(
+      'SELECT id, first_name, last_name, gender, year_of_birth, freestyle_50, backstroke_50, breaststroke_50, butterfly_50, availability_json, medical_date FROM swimmers ORDER BY first_name, last_name'
+    );
+    if (!result.length || !result[0].values.length) return [];
+    const cols = result[0].columns;
+    const year = new Date().getFullYear();
+    return result[0].values.map((row) => {
+      const o = {};
+      cols.forEach((c, i) => { o[c] = row[i]; });
+      const first = o.first_name || '';
+      const last = o.last_name || '';
+      let availability = {};
+      try {
+        if (o.availability_json) availability = JSON.parse(o.availability_json);
+      } catch (_) {}
+      return {
+        id: o.id,
+        first_name: first,
+        last_name: last,
+        full_name: `${first} ${last}`.trim(),
+        gender: o.gender || null,
+        year_of_birth: o.year_of_birth,
+        age: o.year_of_birth != null ? year - o.year_of_birth : null,
+        freestyle_50: o.freestyle_50,
+        backstroke_50: o.backstroke_50,
+        breaststroke_50: o.breaststroke_50,
+        butterfly_50: o.butterfly_50,
+        availability,
+        medical_date: o.medical_date || null,
+      };
+    });
+  } finally {
+    db.close();
+  }
+}
+
+// Renderer calls this when ready; main reads DB file directly so list always matches what we write to.
+ipcMain.handle('request-initial-swimmers', async () => {
+  try {
+    const swimmers = await loadSwimmersFromDb();
+    return { swimmers };
+  } catch (_) {
+    return { swimmers: [] };
+  }
 });

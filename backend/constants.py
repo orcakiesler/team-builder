@@ -24,6 +24,7 @@ LAST_NAME_CANDIDATES = [
 ]
 YOB_CANDIDATES = ["year of birth", "yob", "birth year", "born", "birth_year"]
 GENDER_CANDIDATES = ["gender", "sex"]
+MEDICALS_CANDIDATES = ["medicals", "medical", "last medical", "medical date", "medical check"]
 
 # Gender values
 GENDER_MEN = "m"

@@ -121,12 +121,38 @@ body {
 }
 
 .file-card {
+  position: relative;
   background: var(--surface);
   border: 2px dashed var(--border);
   border-radius: var(--radius);
   padding: 1.25rem;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
+}
+.file-card-clear {
+  display: none;
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--surface2);
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.file-card-clear:hover {
+  color: var(--text);
+  background: var(--border);
+}
+.file-card.has-file .file-card-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .file-card:hover,
 .file-card.drag-over {
@@ -366,6 +392,15 @@ body {
 }
 .swimmer-row .swimmer-name:hover { color: var(--accent); }
 .swimmer-row-no-cb .swimmer-name { cursor: pointer; }
+.medical-indicator {
+  flex-shrink: 0;
+  width: 1.25rem;
+  text-align: center;
+  font-weight: bold;
+}
+.medical-ok { color: #22c55e; }
+.medical-expired { color: #ef4444; }
+.medical-unknown { color: var(--text-muted); }
 .swimmer-item {
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--border);
@@ -468,17 +503,21 @@ body {
   font-size: 0.8rem;
   margin-bottom: 0.25rem;
 }
+.form-group .required { color: #ef4444; }
 .form-group input[type="text"],
-.form-group input[type="date"] {
+.form-group input[type="date"],
+.form-group input[type="number"],
+.form-group select {
   width: 100%;
   padding: 0.5rem 0.75rem;
   font-size: 0.9rem;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   color: var(--text);
 }
-.form-group input:focus {
+.form-group input:focus,
+.form-group select:focus {
   outline: none;
   border-color: var(--accent);
 }
@@ -516,10 +555,37 @@ body {
   outline: none;
   border-color: var(--accent);
 }
-.availability-checkboxes {
+.availability-checkboxes .availability-checkboxes-inner {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem 1.25rem;
+}
+.availability-checkboxes label.checkbox-label,
+.availability-checkboxes .availability-checkboxes-inner label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  color: var(--text);
+}
+.form-group.times-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+.form-group.times-row > label {
+  grid-column: 1 / -1;
+}
+.form-group.times-row input {
+  width: 100%;
+  min-width: 0;
+}
+.availability-checkboxes {
+  display: block;
+}
+.availability-checkboxes > label {
+  display: block;
+  margin-bottom: 0.25rem;
 }
 .availability-checkboxes label {
   display: flex;
