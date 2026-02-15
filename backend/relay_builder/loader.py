@@ -13,6 +13,7 @@ from constants import (
     LAST_NAME_CANDIDATES,
     YOB_CANDIDATES,
     GENDER_CANDIDATES,
+    MEDICALS_CANDIDATES,
     STROKE_COLUMN_ALIASES,
 )
 
@@ -58,6 +59,35 @@ def _parse_time_to_seconds(value) -> Optional[float]:
     try:
         return float(s)
     except ValueError:
+        return None
+
+
+def _parse_medical_date(value) -> Optional[str]:
+    """
+    Parse a cell value as dd/mm/yyyy into YYYY-MM-DD string, or return None.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if pd.isna(value):  # pandas NaT or other NA
+        return None
+    if hasattr(value, "strftime"):  # datetime (but not NaT)
+        try:
+            return value.strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            return None
+    s = str(value).strip()
+    if not s:
+        return None
+    # dd/mm/yyyy or d/m/yyyy
+    parts = s.replace("-", "/").split("/")
+    if len(parts) != 3:
+        return None
+    try:
+        day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
+        if year < 100:
+            year += 2000 if year < 50 else 1900
+        return date(year, month, day).strftime("%Y-%m-%d")
+    except (ValueError, TypeError):
         return None
 
 
@@ -127,6 +157,7 @@ def load_people(
     avail_last_name_col = find_col(avail_df, LAST_NAME_CANDIDATES)
     avail_yob_col = find_col(avail_df, YOB_CANDIDATES)
     avail_gender_col = find_col(avail_df, GENDER_CANDIDATES)
+    avail_medical_col = find_col(avail_df, MEDICALS_CANDIDATES)
 
     if not (best_full_name_col or (best_first_name_col and best_last_name_col)):
         raise ValueError(
@@ -197,6 +228,7 @@ def load_people(
             avail_last_name_col,
             avail_yob_col,
             avail_gender_col,
+            avail_medical_col,
         ]
         if c is not None
     }
@@ -263,6 +295,11 @@ def load_people(
             is_available = pd.notna(val) and val != "" and str(val).strip() != ""
             availability[col] = is_available
 
+        # Medical date (dd/mm/yyyy from names sheet)
+        medical_date = None
+        if avail_medical_col and avail_medical_col in avail_row:
+            medical_date = _parse_medical_date(avail_row[avail_medical_col])
+
         # Age from year of birth (current year at load time)
         age = (date.today().year - yob) if yob is not None else None
 
@@ -278,8 +315,176 @@ def load_people(
                 breaststroke_50=breaststroke_50,
                 butterfly_50=butterfly_50,
                 availability=availability,
+                medical_date=medical_date,
             )
         )
 
+    return people
+
+
+def load_people_from_names_only(names_relays_path: str | Path) -> List[Person]:
+    """
+    Load swimmers from the names/relays Excel file only.
+    Best times are left None. Use for "names only" import (add/update from names, times empty for new).
+    """
+    names_relays_path = Path(names_relays_path)
+    avail_df = pd.read_excel(names_relays_path)
+    avail_df = _normalize_column_names(avail_df)
+
+    def find_col(df, candidates):
+        for c in candidates:
+            if c in df.columns:
+                return c
+        return None
+
+    avail_full_name_col = find_col(avail_df, NAME_CANDIDATES)
+    avail_first_name_col = find_col(avail_df, FIRST_NAME_CANDIDATES)
+    avail_last_name_col = find_col(avail_df, LAST_NAME_CANDIDATES)
+    avail_yob_col = find_col(avail_df, YOB_CANDIDATES)
+    avail_gender_col = find_col(avail_df, GENDER_CANDIDATES)
+    avail_medical_col = find_col(avail_df, MEDICALS_CANDIDATES)
+
+    if not (avail_full_name_col or (avail_first_name_col and avail_last_name_col)):
+        raise ValueError(
+            "Could not find name columns in names-relays file. "
+            "Expected either 'name' or 'first name' + 'last name'."
+        )
+
+    identity_cols = {
+        c
+        for c in [
+            avail_full_name_col,
+            avail_first_name_col,
+            avail_last_name_col,
+            avail_yob_col,
+            avail_gender_col,
+            avail_medical_col,
+        ]
+        if c is not None
+    }
+    availability_cols = [c for c in avail_df.columns if c not in identity_cols]
+
+    people: List[Person] = []
+    for _, avail_row in avail_df.iterrows():
+        first, last = _split_name(
+            avail_row,
+            avail_first_name_col or "",
+            avail_last_name_col,
+            avail_full_name_col,
+        )
+        if not first and not last:
+            continue
+
+        gender = None
+        if avail_gender_col and avail_gender_col in avail_row and pd.notna(avail_row[avail_gender_col]):
+            g = str(avail_row[avail_gender_col]).strip().lower()
+            if g in ("m", "f", "male", "female"):
+                gender = "m" if g in ("m", "male") else "f"
+
+        yob = None
+        if avail_yob_col and avail_yob_col in avail_row:
+            val = avail_row[avail_yob_col]
+            if pd.notna(val) and val != "":
+                try:
+                    yob = int(val)
+                except (TypeError, ValueError):
+                    try:
+                        yob = int(float(str(val).strip()))
+                    except (TypeError, ValueError):
+                        yob = None
+
+        availability = {}
+        for col in availability_cols:
+            val = avail_row[col]
+            is_available = pd.notna(val) and val != "" and str(val).strip() != ""
+            availability[col] = is_available
+
+        medical_date = None
+        if avail_medical_col and avail_medical_col in avail_row:
+            medical_date = _parse_medical_date(avail_row[avail_medical_col])
+
+        age = (date.today().year - yob) if yob is not None else None
+        people.append(
+            Person(
+                first_name=first,
+                last_name=last,
+                gender=gender,
+                year_of_birth=yob,
+                age=age,
+                freestyle_50=None,
+                backstroke_50=None,
+                breaststroke_50=None,
+                butterfly_50=None,
+                availability=availability,
+                medical_date=medical_date,
+            )
+        )
+    return people
+
+
+def load_people_from_best_times_only(best_times_path: str | Path) -> List[Person]:
+    """
+    Load name + best times from the best-times Excel file only.
+    Use for "best times only" import: match by name to DB and update times; skip if not in DB.
+    """
+    best_times_path = Path(best_times_path)
+    best_df = pd.read_excel(best_times_path)
+    best_df = _normalize_column_names(best_df)
+
+    def find_col(df, candidates):
+        for c in candidates:
+            if c in df.columns:
+                return c
+        return None
+
+    best_full_name_col = find_col(best_df, NAME_CANDIDATES)
+    best_first_name_col = find_col(best_df, FIRST_NAME_CANDIDATES)
+    best_last_name_col = find_col(best_df, LAST_NAME_CANDIDATES)
+    best_yob_col = find_col(best_df, YOB_CANDIDATES)
+
+    if not (best_full_name_col or (best_first_name_col and best_last_name_col)):
+        raise ValueError(
+            "Could not find name columns in best-times file. "
+            "Expected either 'name' or 'first name' + 'last name'."
+        )
+
+    stroke_cols = {}
+    for attr, aliases in STROKE_COLUMN_ALIASES.items():
+        for alias in aliases:
+            if alias in best_df.columns:
+                stroke_cols[attr] = alias
+                break
+
+    people: List[Person] = []
+    for _, best_row in best_df.iterrows():
+        first, last = _split_name(
+            best_row,
+            best_first_name_col or "",
+            best_last_name_col,
+            best_full_name_col,
+        )
+        if not first and not last:
+            continue
+
+        freestyle_50 = _parse_time_to_seconds(best_row[stroke_cols["freestyle_50"]]) if "freestyle_50" in stroke_cols else None
+        backstroke_50 = _parse_time_to_seconds(best_row[stroke_cols["backstroke_50"]]) if "backstroke_50" in stroke_cols else None
+        breaststroke_50 = _parse_time_to_seconds(best_row[stroke_cols["breaststroke_50"]]) if "breaststroke_50" in stroke_cols else None
+        butterfly_50 = _parse_time_to_seconds(best_row[stroke_cols["butterfly_50"]]) if "butterfly_50" in stroke_cols else None
+
+        people.append(
+            Person(
+                first_name=first,
+                last_name=last,
+                gender=None,
+                year_of_birth=None,
+                age=None,
+                freestyle_50=freestyle_50,
+                backstroke_50=backstroke_50,
+                breaststroke_50=breaststroke_50,
+                butterfly_50=butterfly_50,
+                availability={},
+                medical_date=None,
+            )
+        )
     return people
 

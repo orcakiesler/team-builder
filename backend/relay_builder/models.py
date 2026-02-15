@@ -12,6 +12,7 @@ class Person:
     Times are stored in seconds (float) when they can be parsed, otherwise None.
     Availability is a mapping from event name (column name in the availability Excel)
     to a boolean flag.
+    medical_date: date of last medical check (YYYY-MM-DD); valid for 1 year from that date.
     """
 
     first_name: str
@@ -28,6 +29,9 @@ class Person:
 
     # Event-name -> is_available
     availability: Dict[str, bool] = field(default_factory=dict)
+
+    # Last medical check date (YYYY-MM-DD); valid for 1 year
+    medical_date: Optional[str] = None
 
     @property
     def full_name(self) -> str:

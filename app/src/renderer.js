@@ -30,7 +30,25 @@ const addCompetitionClose = document.getElementById('add-competition-close');
 const addCompetitionForm = document.getElementById('add-competition-form');
 const addCompetitionCancel = document.getElementById('add-competition-cancel');
 const addCompetitionSave = document.getElementById('add-competition-save');
+const addSwimmerBtn = document.getElementById('add-swimmer-btn');
+const refreshSwimmersBtn = document.getElementById('refresh-swimmers-btn');
+const addSwimmerModal = document.getElementById('add-swimmer-modal-overlay');
+const addSwimmerClose = document.getElementById('add-swimmer-close');
+const addSwimmerForm = document.getElementById('add-swimmer-form');
+const addSwimmerCancel = document.getElementById('add-swimmer-cancel');
+const addSwimmerSave = document.getElementById('add-swimmer-save');
+const addSwimmerBack = document.getElementById('add-swimmer-back');
+const addSwimmerStep1 = document.getElementById('add-swimmer-step1');
+const addSwimmerStep2 = document.getElementById('add-swimmer-step2');
+const addSwimmerAvailability = document.getElementById('add-swimmer-availability');
+const modalEditBtn = document.getElementById('modal-edit-btn');
+const editModalOverlay = document.getElementById('edit-modal-overlay');
+const editModalClose = document.getElementById('edit-modal-close');
+const editCancelBtn = document.getElementById('edit-cancel-btn');
+const editSaveBtn = document.getElementById('edit-save-btn');
+const editSwimmerForm = document.getElementById('edit-swimmer-form');
 
+const AVAILABILITY_KEYS = ['freestyle', 'medley', 'freestyle_mix', 'medley_mix'];
 const STORAGE_LAST_MEET = 'relay_last_meet_id';
 const STORAGE_LAST_TEAMS = 'relay_last_teams';
 
@@ -125,8 +143,8 @@ function clearLoading() {
 
 function updateImportButton() {
   const { bestTimesPath, namesRelaysPath } = getPaths();
-  const both = bestTimesPath && namesRelaysPath;
-  importBtn.disabled = !both;
+  const atLeastOne = bestTimesPath || namesRelaysPath;
+  importBtn.disabled = !atLeastOne;
 }
 
 function setFile(which, filePath) {
@@ -163,6 +181,15 @@ function setupDrop(card, which) {
 
 setupDrop(cardBestTimes, 'best_times');
 setupDrop(cardNamesRelays, 'names_relays');
+
+const clearBestTimesBtn = document.getElementById('clear-best-times');
+const clearNamesRelaysBtn = document.getElementById('clear-names-relays');
+if (clearBestTimesBtn) {
+  clearBestTimesBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); setFile('best_times', null); });
+}
+if (clearNamesRelaysBtn) {
+  clearNamesRelaysBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); setFile('names_relays', null); });
+}
 
 function formatTime(sec) {
   if (sec == null) return '–';
@@ -278,6 +305,32 @@ function updateRemoveCompetitionsButtonVisibility() {
   }
 }
 
+function isMedicalValidForMeet(medicalDateStr, meetStartDateStr) {
+  if (!meetStartDateStr || !String(meetStartDateStr).trim()) return null;
+  if (!medicalDateStr || !String(medicalDateStr).trim()) return false;
+  const meetStr = String(meetStartDateStr).trim().slice(0, 10);
+  const medStr = String(medicalDateStr).trim().slice(0, 10);
+  try {
+    const meetDate = new Date(meetStr);
+    const medDate = new Date(medStr);
+    if (isNaN(meetDate.getTime()) || isNaN(medDate.getTime())) return null;
+    const oneYearAfterMed = new Date(medDate);
+    oneYearAfterMed.setFullYear(oneYearAfterMed.getFullYear() + 1);
+    return oneYearAfterMed >= meetDate;
+  } catch (_) {
+    return null;
+  }
+}
+
+function medicalIndicator(swimmer, meetStartDateStr) {
+  const med = swimmer.medical_date;
+  if (!med || !String(med).trim()) return '<span class="medical-unknown" title="No medical date">—</span>';
+  const valid = isMedicalValidForMeet(med, meetStartDateStr);
+  if (valid === null) return '<span class="medical-unknown" title="No meet selected">—</span>';
+  if (valid) return '<span class="medical-ok" title="Medical valid">✓</span>';
+  return '<span class="medical-expired" title="Medical expired">✗</span>';
+}
+
 function renderSwimmers(swimmers) {
   currentSwimmers = swimmers || [];
   if (!currentSwimmers.length) {
@@ -286,12 +339,15 @@ function renderSwimmers(swimmers) {
     selectAllSwimmersBtn.classList.add('hidden');
     return;
   }
+  const meet = currentCompetitions.find((c) => c.id === selectedMeetId);
+  const meetStart = meet ? meet.start_date : null;
   if (swimmerSelectMode) {
     swimmersList.innerHTML = currentSwimmers
       .map(
         (s, index) =>
           `<div class="swimmer-row" data-index="${index}">
             <input type="checkbox" value="${s.id ?? ''}" class="swimmer-cb" />
+            <span class="medical-indicator">${medicalIndicator(s, meetStart)}</span>
             <span class="swimmer-name">${escapeHtml(s.full_name)}</span>
           </div>`
       )
@@ -304,6 +360,7 @@ function renderSwimmers(swimmers) {
       .map(
         (s, index) =>
           `<div class="swimmer-row swimmer-row-no-cb" data-index="${index}">
+            <span class="medical-indicator">${medicalIndicator(s, meetStart)}</span>
             <span class="swimmer-name">${escapeHtml(s.full_name)}</span>
           </div>`
       )
@@ -333,6 +390,7 @@ function openSwimmerModal(s) {
   const availList = Object.entries(avail)
     .map(([k, v]) => `<li><span>${escapeHtml(k)}</span><span>${v ? 'Yes' : 'No'}</span></li>`)
     .join('');
+  const medicalStr = s.medical_date && String(s.medical_date).trim() ? escapeHtml(String(s.medical_date).slice(0, 10)) : '–';
   modalBody.innerHTML = `
     <dl>
       <dt>First name</dt><dd>${escapeHtml(s.first_name)}</dd>
@@ -340,6 +398,7 @@ function openSwimmerModal(s) {
       <dt>Gender</dt><dd>${escapeHtml(s.gender ?? '–')}</dd>
       <dt>Year of birth</dt><dd>${s.year_of_birth ?? '–'}</dd>
       <dt>Age</dt><dd>${s.age ?? '–'}</dd>
+      <dt>Medical date</dt><dd>${medicalStr}</dd>
       <dt>50 Free</dt><dd>${formatTime(s.freestyle_50)}</dd>
       <dt>50 Back</dt><dd>${formatTime(s.backstroke_50)}</dd>
       <dt>50 Breast</dt><dd>${formatTime(s.breaststroke_50)}</dd>
@@ -352,6 +411,144 @@ function openSwimmerModal(s) {
   modalOverlay.classList.remove('hidden');
   swimmerBeingEdited = s;
 }
+
+function buildEditFormHTML() {
+  const availCheckboxes = AVAILABILITY_KEYS.map(
+    (k) =>
+      `<label class="checkbox-label"><input type="checkbox" name="avail-${k}" data-key="${escapeHtml(k)}" /> ${escapeHtml(k.replace('_', ' '))}</label>`
+  ).join('');
+  return `
+    <div class="form-group">
+      <label for="edit-first-name">First name <span class="required">*</span></label>
+      <input type="text" id="edit-first-name" required />
+    </div>
+    <div class="form-group">
+      <label for="edit-last-name">Last name <span class="required">*</span></label>
+      <input type="text" id="edit-last-name" required />
+    </div>
+    <div class="form-group">
+      <label for="edit-gender">Gender <span class="required">*</span></label>
+      <select id="edit-gender" required>
+        <option value="m">Male</option>
+        <option value="f">Female</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="edit-year-of-birth">Birth year <span class="required">*</span></label>
+      <input type="number" id="edit-year-of-birth" required min="1900" max="2030" />
+    </div>
+    <div class="form-group">
+      <label for="edit-medical-date">Medical date</label>
+      <input type="date" id="edit-medical-date" />
+    </div>
+    <div class="form-group times-row">
+      <label>Best times (50m, seconds)</label>
+      <input type="number" id="edit-freestyle" step="0.01" min="0" placeholder="50 Free" />
+      <input type="number" id="edit-backstroke" step="0.01" min="0" placeholder="50 Back" />
+      <input type="number" id="edit-breaststroke" step="0.01" min="0" placeholder="50 Breast" />
+      <input type="number" id="edit-butterfly" step="0.01" min="0" placeholder="50 Fly" />
+    </div>
+    <div class="form-group availability-checkboxes">
+      <label>Availability</label>
+      <div class="availability-checkboxes-inner">${availCheckboxes}</div>
+    </div>
+  `;
+}
+
+function openEditModal(swimmer) {
+  if (!swimmer || !swimmer.id) return;
+  editSwimmerForm.innerHTML = buildEditFormHTML();
+  document.getElementById('edit-first-name').value = swimmer.first_name || '';
+  document.getElementById('edit-last-name').value = swimmer.last_name || '';
+  document.getElementById('edit-gender').value = swimmer.gender === 'f' ? 'f' : 'm';
+  document.getElementById('edit-year-of-birth').value = swimmer.year_of_birth ?? '';
+  const medDate = swimmer.medical_date && String(swimmer.medical_date).trim() ? String(swimmer.medical_date).slice(0, 10) : '';
+  document.getElementById('edit-medical-date').value = medDate;
+  document.getElementById('edit-freestyle').value = swimmer.freestyle_50 != null ? swimmer.freestyle_50 : '';
+  document.getElementById('edit-backstroke').value = swimmer.backstroke_50 != null ? swimmer.backstroke_50 : '';
+  document.getElementById('edit-breaststroke').value = swimmer.breaststroke_50 != null ? swimmer.breaststroke_50 : '';
+  document.getElementById('edit-butterfly').value = swimmer.butterfly_50 != null ? swimmer.butterfly_50 : '';
+  const avail = swimmer.availability || {};
+  AVAILABILITY_KEYS.forEach((k) => {
+    const cb = editSwimmerForm.querySelector(`input[name="avail-${k}"]`);
+    if (cb) cb.checked = !!avail[k];
+  });
+  modalOverlay.classList.add('hidden');
+  editModalOverlay.classList.remove('hidden');
+}
+
+function closeEditModal() {
+  editModalOverlay.classList.add('hidden');
+}
+
+function getEditFormPayload() {
+  const first_name = document.getElementById('edit-first-name').value.trim();
+  const last_name = document.getElementById('edit-last-name').value.trim();
+  const gender = document.getElementById('edit-gender').value;
+  const year_of_birth = document.getElementById('edit-year-of-birth').value.trim();
+  const medical_date = document.getElementById('edit-medical-date').value.trim() || null;
+  const freestyle_50 = document.getElementById('edit-freestyle').value.trim();
+  const backstroke_50 = document.getElementById('edit-backstroke').value.trim();
+  const breaststroke_50 = document.getElementById('edit-breaststroke').value.trim();
+  const butterfly_50 = document.getElementById('edit-butterfly').value.trim();
+  const availability = {};
+  AVAILABILITY_KEYS.forEach((k) => {
+    const cb = editSwimmerForm.querySelector(`input[name="avail-${k}"]`);
+    availability[k] = cb ? cb.checked : false;
+  });
+  return {
+    id: swimmerBeingEdited.id,
+    first_name,
+    last_name,
+    gender: gender || null,
+    year_of_birth: year_of_birth === '' ? null : parseInt(year_of_birth, 10),
+    medical_date,
+    freestyle_50: freestyle_50 === '' ? null : parseFloat(freestyle_50),
+    backstroke_50: backstroke_50 === '' ? null : parseFloat(backstroke_50),
+    breaststroke_50: breaststroke_50 === '' ? null : parseFloat(breaststroke_50),
+    butterfly_50: butterfly_50 === '' ? null : parseFloat(butterfly_50),
+    availability,
+  };
+}
+
+modalEditBtn.addEventListener('click', () => {
+  if (swimmerBeingEdited) openEditModal(swimmerBeingEdited);
+});
+
+editModalClose.addEventListener('click', closeEditModal);
+editCancelBtn.addEventListener('click', closeEditModal);
+editModalOverlay.addEventListener('click', (e) => {
+  if (e.target === editModalOverlay) closeEditModal();
+});
+
+editSaveBtn.addEventListener('click', async () => {
+  if (!swimmerBeingEdited) return;
+  const first_name = document.getElementById('edit-first-name').value.trim();
+  const last_name = document.getElementById('edit-last-name').value.trim();
+  const year_of_birth = document.getElementById('edit-year-of-birth').value.trim();
+  if (!first_name || !last_name) {
+    alert('First name and last name are required.');
+    return;
+  }
+  const yob = year_of_birth === '' ? null : parseInt(year_of_birth, 10);
+  if (year_of_birth === '' || isNaN(yob) || yob < 1900 || yob > 2030) {
+    alert('Please enter a valid birth year (1900–2030).');
+    return;
+  }
+  setLoading('Saving…');
+  try {
+    await ensureDbPath();
+    const payload = getEditFormPayload();
+    await window.electronAPI.runBackend({ command: 'update-swimmer', dbPath, payload });
+    await loadSwimmers();
+    closeEditModal();
+    swimmerBeingEdited = null;
+  } catch (err) {
+    alert('Error: ' + (err.message || String(err)));
+  } finally {
+    clearLoading();
+  }
+});
 
 modalClose.addEventListener('click', () => {
   modalOverlay.classList.add('hidden');
@@ -368,6 +565,7 @@ async function loadSwimmers() {
     const data = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath });
     currentSwimmers = data.swimmers || [];
     renderSwimmers(currentSwimmers);
+    runHint.textContent = 'Import Excel files to add/update swimmers. Build teams uses the database.';
   } catch (err) {
     currentSwimmers = [];
     renderSwimmers([]);
@@ -375,6 +573,10 @@ async function loadSwimmers() {
   } finally {
     clearLoading();
   }
+}
+
+if (refreshSwimmersBtn) {
+  refreshSwimmersBtn.addEventListener('click', () => loadSwimmers());
 }
 
 async function loadCompetitions() {
@@ -452,7 +654,7 @@ meetDropdownPanel.addEventListener('click', (e) => e.stopPropagation());
 
 importBtn.addEventListener('click', async () => {
   const { bestTimesPath, namesRelaysPath } = getPaths();
-  if (!bestTimesPath || !namesRelaysPath) return;
+  if (!bestTimesPath && !namesRelaysPath) return;
   setLoading('Importing…');
   importBtn.disabled = true;
   try {
@@ -460,11 +662,15 @@ importBtn.addEventListener('click', async () => {
     const data = await window.electronAPI.runBackend({
       command: 'import-files',
       dbPath,
-      bestTimesPath,
-      namesRelaysPath,
+      bestTimesPath: bestTimesPath || undefined,
+      namesRelaysPath: namesRelaysPath || undefined,
     });
     renderSwimmers(data.swimmers);
-    alert(`Imported: ${data.imported || 0} added, ${data.updated || 0} updated.`);
+    let msg = `Imported: ${data.imported || 0} added, ${data.updated || 0} updated.`;
+    if (data.skipped && data.skipped.length) {
+      msg += `\n\nNot in database (best-times only, not added):\n${data.skipped.join('\n')}`;
+    }
+    alert(msg);
   } catch (err) {
     alert('Error: ' + (err.message || String(err)));
   } finally {
@@ -478,8 +684,18 @@ runBtn.addEventListener('click', async () => {
   runBtn.disabled = true;
   try {
     await ensureDbPath();
-    const data = await window.electronAPI.runBackend({ command: 'build-teams', dbPath });
+    const meet = currentCompetitions.find((c) => c.id === selectedMeetId);
+    const meetStartDate = meet ? meet.start_date : null;
+    const data = await window.electronAPI.runBackend({
+      command: 'build-teams',
+      dbPath,
+      meetStartDate: meetStartDate || undefined,
+    });
     lastTeamsResult = data;
+    // Sync swimmers list from backend so the list matches what build-teams used (fixes list sometimes empty).
+    if (data.swimmers && Array.isArray(data.swimmers)) {
+      currentSwimmers = data.swimmers;
+    }
     renderTeams(data.teams);
     renderSwimmers(currentSwimmers);
     resultsSection.classList.remove('hidden');
@@ -498,6 +714,8 @@ runBtn.addEventListener('click', async () => {
 selectModeBtn.addEventListener('click', () => {
   swimmerSelectMode = !swimmerSelectMode;
   selectModeBtn.textContent = swimmerSelectMode ? 'Done' : 'Select';
+  addSwimmerBtn.classList.toggle('hidden', swimmerSelectMode);
+  if (refreshSwimmersBtn) refreshSwimmersBtn.classList.toggle('hidden', swimmerSelectMode);
   renderSwimmers(currentSwimmers);
   if (swimmerSelectMode) {
     updateSelectAllButtonLabel();
@@ -595,10 +813,171 @@ addCompetitionSave.addEventListener('click', async () => {
   }
 });
 
+function showAddSwimmerStep(step) {
+  if (step === 1) {
+    addSwimmerStep1.classList.remove('hidden');
+    addSwimmerStep2.classList.add('hidden');
+    addSwimmerSave.textContent = 'Next';
+    addSwimmerBack.classList.add('hidden');
+  } else {
+    addSwimmerStep1.classList.add('hidden');
+    addSwimmerStep2.classList.remove('hidden');
+    addSwimmerSave.textContent = 'Add';
+    addSwimmerBack.classList.remove('hidden');
+  }
+}
+
+function ensureAddSwimmerAvailabilityCheckboxes() {
+  if (addSwimmerAvailability && addSwimmerAvailability.children.length === 0) {
+    addSwimmerAvailability.innerHTML = AVAILABILITY_KEYS.map(
+      (k) =>
+        `<label class="checkbox-label"><input type="checkbox" name="new-avail-${k}" data-key="${k}" /> ${k.replace('_', ' ')}</label>`
+    ).join('');
+  }
+}
+
+function resetAddSwimmerForm() {
+  addSwimmerForm.reset();
+  showAddSwimmerStep(1);
+  ensureAddSwimmerAvailabilityCheckboxes();
+  const ids = ['new-freestyle', 'new-backstroke', 'new-breaststroke', 'new-butterfly'];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  AVAILABILITY_KEYS.forEach((k) => {
+    const cb = addSwimmerAvailability && addSwimmerAvailability.querySelector(`input[name="new-avail-${k}"]`);
+    if (cb) cb.checked = false;
+  });
+  addSwimmerModal.querySelectorAll('input, select').forEach((el) => {
+    el.disabled = false;
+    el.removeAttribute('readonly');
+  });
+}
+
+addSwimmerBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  clearLoading();
+  resetAddSwimmerForm();
+  addSwimmerModal.classList.remove('hidden');
+  addSwimmerBtn.blur();
+  // Delay focus so the button fully releases focus and inputs accept typing (fixes second-open in Electron).
+  setTimeout(() => {
+    const first = document.getElementById('new-first-name');
+    if (first) {
+      first.focus();
+      first.removeAttribute('readonly');
+      first.disabled = false;
+    }
+  }, 100);
+});
+
+function closeAddSwimmerModal() {
+  resetAddSwimmerForm();
+  addSwimmerModal.classList.add('hidden');
+}
+
+addSwimmerClose.addEventListener('click', closeAddSwimmerModal);
+addSwimmerCancel.addEventListener('click', closeAddSwimmerModal);
+addSwimmerModal.addEventListener('click', (e) => {
+  if (e.target === addSwimmerModal) closeAddSwimmerModal();
+});
+
+addSwimmerBack.addEventListener('click', () => showAddSwimmerStep(1));
+
+addSwimmerSave.addEventListener('click', async () => {
+  const first_name = document.getElementById('new-first-name').value.trim();
+  const last_name = document.getElementById('new-last-name').value.trim();
+  const yearRaw = document.getElementById('new-year-of-birth').value.trim();
+  const gender = document.getElementById('new-gender').value;
+  const medical_date = document.getElementById('new-medical-date').value.trim() || null;
+
+  if (addSwimmerStep2.classList.contains('hidden')) {
+    if (!first_name || !last_name) {
+      alert('First name and last name are required.');
+      return;
+    }
+    const year_of_birth = yearRaw === '' ? null : parseInt(yearRaw, 10);
+    if (yearRaw === '' || isNaN(year_of_birth) || year_of_birth < 1900 || year_of_birth > 2030) {
+      alert('Please enter a valid birth year (1900–2030).');
+      return;
+    }
+    if (gender !== 'm' && gender !== 'f') {
+      alert('Please select a gender.');
+      return;
+    }
+    showAddSwimmerStep(2);
+    return;
+  }
+
+  const year_of_birth = yearRaw === '' ? null : parseInt(yearRaw, 10);
+  if (!first_name || !last_name) {
+    alert('First name and last name are required.');
+    return;
+  }
+  if (yearRaw === '' || isNaN(year_of_birth) || year_of_birth < 1900 || year_of_birth > 2030) {
+    alert('Please enter a valid birth year (1900–2030).');
+    return;
+  }
+  if (gender !== 'm' && gender !== 'f') {
+    alert('Please select a gender.');
+    return;
+  }
+
+  const freestyle_50 = document.getElementById('new-freestyle') && document.getElementById('new-freestyle').value.trim();
+  const backstroke_50 = document.getElementById('new-backstroke') && document.getElementById('new-backstroke').value.trim();
+  const breaststroke_50 = document.getElementById('new-breaststroke') && document.getElementById('new-breaststroke').value.trim();
+  const butterfly_50 = document.getElementById('new-butterfly') && document.getElementById('new-butterfly').value.trim();
+  const availability = {};
+  AVAILABILITY_KEYS.forEach((k) => {
+    const cb = addSwimmerAvailability && addSwimmerAvailability.querySelector(`input[name="new-avail-${k}"]`);
+    availability[k] = cb ? cb.checked : false;
+  });
+
+  const payload = {
+    first_name,
+    last_name,
+    year_of_birth,
+    gender,
+    medical_date: medical_date || undefined,
+    freestyle_50: freestyle_50 === '' ? undefined : parseFloat(freestyle_50),
+    backstroke_50: backstroke_50 === '' ? undefined : parseFloat(backstroke_50),
+    breaststroke_50: breaststroke_50 === '' ? undefined : parseFloat(breaststroke_50),
+    butterfly_50: butterfly_50 === '' ? undefined : parseFloat(butterfly_50),
+    availability: Object.keys(availability).length ? availability : undefined,
+  };
+
+  setLoading('Adding swimmer…');
+  try {
+    await ensureDbPath();
+    const data = await window.electronAPI.runBackend({
+      command: 'add-swimmer',
+      dbPath,
+      payload,
+    });
+    currentSwimmers = data.swimmers || [];
+    renderSwimmers(currentSwimmers);
+    closeAddSwimmerModal();
+  } catch (err) {
+    alert('Error: ' + (err.message || String(err)));
+  } finally {
+    clearLoading();
+  }
+});
+
 updateImportButton();
 
 (async function init() {
+  swimmersList.innerHTML = '<p class="text-muted">Loading swimmers…</p>';
   await ensureDbPath();
-  await loadSwimmers();
+  // Request initial swimmers from main process (same DB path as Refresh/Build teams, no race).
+  try {
+    const data = await window.electronAPI.requestInitialSwimmers();
+    currentSwimmers = data.swimmers || [];
+    renderSwimmers(currentSwimmers);
+    runHint.textContent = 'Import Excel files to add/update swimmers. Build teams uses the database.';
+  } catch (_) {
+    await loadSwimmers();
+  }
   await loadCompetitions();
 })();
