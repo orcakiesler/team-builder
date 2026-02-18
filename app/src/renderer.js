@@ -88,7 +88,7 @@
       if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
         window.RelayApp.swimmers.renderSwimmers(state.currentSwimmers);
       }
-      if (runHint) runHint.textContent = 'Import Excel files to add/update swimmers. Build teams uses the database.';
+      if (runHint) runHint.textContent = 'Select a meet and build teams, or update from the app';
     } catch (_) {
       await api.loadSwimmers();
     }

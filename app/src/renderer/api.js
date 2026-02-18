@@ -1,7 +1,8 @@
 (function () {
   window.RelayApp = window.RelayApp || {};
   const state = window.RelayApp.state;
-  const loadingEl = document.getElementById('loading');
+  const loadingOverlay = document.getElementById('loading');
+  const loadingMessage = document.getElementById('loading-message');
   const pathBestTimes = document.getElementById('path-best-times');
   const pathNamesRelays = document.getElementById('path-names-relays');
   const runHint = document.getElementById('run-hint');
@@ -12,14 +13,12 @@
   }
 
   function setLoading(msg) {
-    if (loadingEl) {
-      loadingEl.textContent = msg || 'Loading…';
-      loadingEl.classList.remove('hidden');
-    }
+    if (loadingMessage) loadingMessage.textContent = msg || 'Loading…';
+    if (loadingOverlay) loadingOverlay.classList.remove('hidden');
   }
 
   function clearLoading() {
-    if (loadingEl) loadingEl.classList.add('hidden');
+    if (loadingOverlay) loadingOverlay.classList.add('hidden');
   }
 
   function getPaths() {
@@ -38,7 +37,7 @@
       if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
         window.RelayApp.swimmers.renderSwimmers(state.currentSwimmers);
       }
-      if (runHint) runHint.textContent = 'Import Excel files to add/update swimmers. Build teams uses the database.';
+      if (runHint) runHint.textContent = 'Select a meet and build teams, or update from the app';
     } catch (err) {
       state.currentSwimmers = [];
       if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {

@@ -9,46 +9,31 @@
 <body>
   <header class="header">
     <h1>Relay Team Builder</h1>
-    <p class="subtitle">Build your best relay teams, modify swimmers in the database, or import from Excel.</p>
+    <p class="subtitle">Build your best relay teams, for any meet, event, or age group</p>
   </header>
 
-  <section class="competitions-box">
-    <div class="meet-selector">
-      <span class="meet-selector-label">Current meet</span>
-      <button type="button" class="meet-dropdown-trigger" id="meet-dropdown-trigger" title="Select a meet">Select a meet</button>
-      <div class="meet-dropdown-panel hidden" id="meet-dropdown-panel">
-        <div class="meet-dropdown-list" id="meet-dropdown-list"></div>
-        <div class="meet-dropdown-actions">
-          <button type="button" class="btn btn-danger btn-sm hidden" id="remove-selected-competitions-btn">Remove selected</button>
+  <section class="top-bar">
+    <div class="top-bar-left">
+      <div class="meet-selector">
+        <span class="meet-selector-label">Current meet</span>
+        <button type="button" class="meet-dropdown-trigger" id="meet-dropdown-trigger" title="Select a meet">Select a meet</button>
+        <div class="meet-dropdown-panel hidden" id="meet-dropdown-panel">
+          <div class="meet-dropdown-list" id="meet-dropdown-list"></div>
+          <div class="meet-dropdown-actions">
+            <button type="button" class="btn btn-danger btn-sm hidden" id="remove-selected-competitions-btn">Remove selected</button>
+          </div>
         </div>
       </div>
+      <button type="button" class="btn-add" id="add-competition-btn" title="Add competition">+</button>
     </div>
-    <button type="button" class="btn-add" id="add-competition-btn" title="Add competition">+</button>
-  </section>
-
-  <section class="upload-section">
-    <div class="file-cards">
-      <div class="file-card" data-file="best_times" id="card-best-times">
-        <button type="button" class="file-card-clear" id="clear-best-times" aria-label="Remove file" title="Remove file">&times;</button>
-        <h3>Best times (50m)</h3>
-        <p class="file-name" id="name-best-times">Drop file or click to browse</p>
-        <input type="hidden" id="path-best-times" />
-      </div>
-      <div class="file-card" data-file="names_relays" id="card-names-relays">
-        <button type="button" class="file-card-clear" id="clear-names-relays" aria-label="Remove file" title="Remove file">&times;</button>
-        <h3>Names &amp; relay availability</h3>
-        <p class="file-name" id="name-names-relays">Drop file or click to browse</p>
-        <input type="hidden" id="path-names-relays" />
-      </div>
+    <div class="top-bar-actions">
+      <button type="button" class="btn btn-secondary" id="open-import-modal-btn" title="Import from Excel">Import files</button>
+      <button type="button" class="btn btn-primary run-btn" id="run-btn">Build teams</button>
     </div>
-    <div class="action-row">
-      <button type="button" class="btn btn-secondary" id="import-btn" disabled>Import from files</button>
-      <button type="button" class="run-btn btn-primary" id="run-btn">Build teams</button>
-    </div>
-    <p class="run-hint" id="run-hint">Import Excel files to add/update swimmers. Build teams uses the database.</p>
   </section>
 
   <section class="results-section" id="results-section">
+    <p class="run-hint" id="run-hint">Select a meet and build teams, or update from the app</p>
     <div class="panels">
       <div class="panel teams-panel">
         <h2>Teams by event</h2>
@@ -155,6 +140,35 @@
     </div>
   </div>
 
+  <div class="modal-overlay hidden" id="import-files-modal-overlay">
+    <div class="modal modal-import" id="import-files-modal">
+      <div class="modal-header">
+        <h3>Import from Excel</h3>
+        <button type="button" class="modal-close" id="import-files-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted import-modal-hint">Add or update swimmers from Excel. Choose one or both files. Availability applies to the current meet when one is selected.</p>
+        <div class="file-cards file-cards-in-modal">
+          <div class="file-card" data-file="best_times" id="card-best-times">
+            <button type="button" class="file-card-clear" id="clear-best-times" aria-label="Remove file" title="Remove file">&times;</button>
+            <h3>Best times (50m)</h3>
+            <p class="file-name" id="name-best-times">Drop file or click to browse</p>
+            <input type="hidden" id="path-best-times" />
+          </div>
+          <div class="file-card" data-file="names_relays" id="card-names-relays">
+            <button type="button" class="file-card-clear" id="clear-names-relays" aria-label="Remove file" title="Remove file">&times;</button>
+            <h3>Names &amp; relay availability</h3>
+            <p class="file-name" id="name-names-relays">Drop file or click to browse</p>
+            <input type="hidden" id="path-names-relays" />
+          </div>
+        </div>
+        <div class="import-modal-actions">
+          <button type="button" class="btn btn-primary" id="import-btn" disabled>Import from files</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay hidden" id="add-competition-modal-overlay">
     <div class="modal" id="add-competition-modal">
       <div class="modal-header">
@@ -188,7 +202,12 @@
     </div>
   </div>
 
-  <div class="loading hidden" id="loading"></div>
+  <div class="loading-overlay hidden" id="loading">
+    <div class="loading-card">
+      <div class="loading-spinner" aria-hidden="true"></div>
+      <p class="loading-message" id="loading-message">Loading…</p>
+    </div>
+  </div>
 
   <script src="renderer/utils.js"></script>
   <script src="renderer/state.js"></script>
