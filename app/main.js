@@ -3,6 +3,14 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const initSqlJs = require('sql.js');
+const { generateTeamsPDF } = require('./pdfExport');
+const {
+  STDIN_COMMANDS,
+  WINDOW_DEFAULT_WIDTH,
+  WINDOW_DEFAULT_HEIGHT,
+  APP_DATA_DIR_NAME,
+  DB_FILENAME,
+} = require('./constants');
 
 let mainWindow;
 const backendDir = path.resolve(__dirname, '..', 'backend');
@@ -15,9 +23,9 @@ function getDbPath() {
   // Use fixed env-based path so it's identical whether run via "npm start" or packaged app.
   const isWin = process.platform === 'win32';
   const baseDir = isWin
-    ? path.join(process.env.APPDATA || process.env.LOCALAPPDATA || process.env.USERPROFILE || '.', 'relay-team-builder')
-    : path.join(process.env.HOME || '.', '.config', 'relay-team-builder');
-  const appDataDb = path.resolve(baseDir, 'swimmers.db');
+    ? path.join(process.env.APPDATA || process.env.LOCALAPPDATA || process.env.USERPROFILE || '.', APP_DATA_DIR_NAME)
+    : path.join(process.env.HOME || '.', '.config', APP_DATA_DIR_NAME);
+  const appDataDb = path.resolve(baseDir, DB_FILENAME);
   const projectDb = path.resolve(backendDir, 'relay_swimmers.db');
 
   try {
@@ -25,7 +33,7 @@ function getDbPath() {
   } catch (_) {}
 
   if (!fs.existsSync(appDataDb)) {
-    const oldElectronPath = path.join(app.getPath('appData'), 'relay-team-builder', 'swimmers.db');
+    const oldElectronPath = path.join(app.getPath('appData'), APP_DATA_DIR_NAME, DB_FILENAME);
     if (fs.existsSync(oldElectronPath)) {
       try {
         fs.copyFileSync(oldElectronPath, appDataDb);
@@ -42,8 +50,8 @@ function getDbPath() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: WINDOW_DEFAULT_WIDTH,
+    height: WINDOW_DEFAULT_HEIGHT,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -79,8 +87,6 @@ ipcMain.handle('select-file', async (_, { which }) => {
   if (result.canceled) return null;
   return result.filePaths[0];
 });
-
-const STDIN_COMMANDS = ['update-swimmer', 'delete-swimmers', 'add-competition', 'delete-competitions', 'add-swimmer'];
 
 /** Run backend command; always uses main process DB path. */
 function runBackendCommand(options) {
@@ -197,5 +203,23 @@ ipcMain.handle('request-initial-swimmers', async () => {
     return { swimmers };
   } catch (_) {
     return { swimmers: [] };
+  }
+});
+
+ipcMain.handle('export-teams-pdf', async (_, payload) => {
+  const { meetName, meetDate, meetLocation, teams } = payload || {};
+  const safeName = (meetName || 'Relay Teams').replace(/[<>:"/\\|?*]/g, ' ').trim() || 'Relay Teams';
+  const defaultName = `${safeName}.pdf`;
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export teams to PDF',
+    defaultPath: defaultName,
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+  try {
+    await generateTeamsPDF(result.filePath, { meetName: meetName || safeName, meetDate, meetLocation, teams });
+    return { path: result.filePath, canceled: false };
+  } catch (err) {
+    throw new Error(err.message || 'Failed to write PDF');
   }
 });

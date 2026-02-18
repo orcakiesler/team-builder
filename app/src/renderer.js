@@ -78,6 +78,35 @@
     refreshSwimmersBtn.addEventListener('click', () => api.loadSwimmers());
   }
 
+  const exportPdfBtn = document.getElementById('export-teams-pdf-btn');
+  if (exportPdfBtn) {
+    exportPdfBtn.addEventListener('click', async () => {
+      const result = state.lastTeamsResult;
+      if (!result || !result.teams || Object.keys(result.teams).length === 0) {
+        alert('Build teams first, then export to PDF.');
+        return;
+      }
+      const meet = state.currentCompetitions.find((c) => c.id === state.selectedMeetId);
+      const meetName = meet ? (meet.name || 'Relay Teams') : 'Relay Teams';
+      const meetDate = meet && (meet.start_date || meet.end_date)
+        ? [meet.start_date, meet.end_date].filter(Boolean).join(' – ')
+        : null;
+      const meetLocation = meet && meet.location ? meet.location : null;
+      try {
+        const out = await window.electronAPI.exportTeamsToPdf({
+          meetName,
+          meetDate,
+          meetLocation,
+          teams: result.teams,
+        });
+        if (out && out.canceled) return;
+        if (out && out.path) alert('PDF saved to:\n' + out.path);
+      } catch (err) {
+        alert('Export failed: ' + (err.message || String(err)));
+      }
+    });
+  }
+
   (async function init() {
     api.setLoading('Loading…');
     const swimmersList = document.getElementById('swimmers-list');

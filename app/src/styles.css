@@ -336,6 +336,19 @@ body {
   font-weight: 600;
   border-bottom: 1px solid var(--border);
 }
+.teams-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.teams-panel-header h2 {
+  margin: 0;
+  padding: 0;
+  border-bottom: none;
+}
 
 .swimmers-toolbar {
   padding: 0.5rem 1.25rem;

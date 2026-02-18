@@ -18,6 +18,8 @@
     "files": [
       "main.js",
       "preload.js",
+      "constants.js",
+      "pdfExport.js",
       "src/**"
     ]
   },
@@ -26,6 +28,7 @@
     "electron-builder": "^26.7.0"
   },
   "dependencies": {
+    "pdfkit": "^0.15.0",
     "sql.js": "^1.14.0"
   }
 }

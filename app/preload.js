@@ -6,4 +6,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   runScript: (options) => ipcRenderer.invoke('run-script', options),
   runBackend: (options) => ipcRenderer.invoke('run-backend', options),
   requestInitialSwimmers: () => ipcRenderer.invoke('request-initial-swimmers'),
+  exportTeamsToPdf: (payload) => ipcRenderer.invoke('export-teams-pdf', payload),
 });
