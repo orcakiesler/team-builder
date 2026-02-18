@@ -7,6 +7,13 @@ from typing import List, Optional
 import pandas as pd
 
 from .models import Person
+from .parsing import (
+    find_col,
+    normalize_column_names,
+    parse_medical_date,
+    parse_time_to_seconds,
+    split_name,
+)
 from constants import (
     NAME_CANDIDATES,
     FIRST_NAME_CANDIDATES,
@@ -16,101 +23,6 @@ from constants import (
     MEDICALS_CANDIDATES,
     STROKE_COLUMN_ALIASES,
 )
-
-
-def _normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
-    """Lowercase and strip column names for easier matching."""
-    df = df.copy()
-    df.columns = [str(c).strip().lower() for c in df.columns]
-    return df
-
-
-def _parse_time_to_seconds(value) -> Optional[float]:
-    """
-    Parse a cell value into seconds (float).
-
-    Supports:
-    - Empty / NaN -> None
-    - Numeric values (assumed seconds)
-    - Strings like "32.15" (seconds)
-    - Strings like "0:32.15" or "00:32.15" (minutes:seconds.fraction)
-    """
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-
-    if isinstance(value, (int, float)):
-        return float(value)
-
-    s = str(value).strip()
-    if not s:
-        return None
-
-    # Try mm:ss.xx or m:ss.xx
-    if ":" in s:
-        try:
-            mins_str, secs_str = s.split(":", 1)
-            mins = float(mins_str)
-            secs = float(secs_str)
-            return mins * 60.0 + secs
-        except ValueError:
-            pass
-
-    # Fallback: plain seconds
-    try:
-        return float(s)
-    except ValueError:
-        return None
-
-
-def _parse_medical_date(value) -> Optional[str]:
-    """
-    Parse a cell value as dd/mm/yyyy into YYYY-MM-DD string, or return None.
-    """
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    if pd.isna(value):  # pandas NaT or other NA
-        return None
-    if hasattr(value, "strftime"):  # datetime (but not NaT)
-        try:
-            return value.strftime("%Y-%m-%d")
-        except (ValueError, TypeError):
-            return None
-    s = str(value).strip()
-    if not s:
-        return None
-    # dd/mm/yyyy or d/m/yyyy
-    parts = s.replace("-", "/").split("/")
-    if len(parts) != 3:
-        return None
-    try:
-        day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
-        if year < 100:
-            year += 2000 if year < 50 else 1900
-        return date(year, month, day).strftime("%Y-%m-%d")
-    except (ValueError, TypeError):
-        return None
-
-
-def _split_name(row, first_name_col: str, last_name_col: Optional[str], full_name_col: Optional[str]):
-    """
-    Extract first and last name from a row, supporting either:
-    - separate first/last name columns, or
-    - a single full-name column.
-    """
-    if first_name_col in row and pd.notna(row[first_name_col]) and last_name_col and last_name_col in row:
-        first_name = str(row[first_name_col]).strip()
-        last_name = str(row[last_name_col]).strip()
-        return first_name, last_name
-
-    if full_name_col and full_name_col in row and pd.notna(row[full_name_col]):
-        full = str(row[full_name_col]).strip()
-        parts = full.split()
-        if len(parts) == 1:
-            return parts[0], ""
-        return parts[0], " ".join(parts[1:])
-
-    # Fallback to empty
-    return "", ""
 
 
 def load_people(
@@ -136,16 +48,8 @@ def load_people(
     best_df = pd.read_excel(best_times_path)
     avail_df = pd.read_excel(names_relays_path)
 
-    best_df = _normalize_column_names(best_df)
-    avail_df = _normalize_column_names(avail_df)
-
-    # Guess name / identity columns using shared constants
-
-    def find_col(df, candidates):
-        for c in candidates:
-            if c in df.columns:
-                return c
-        return None
+    best_df = normalize_column_names(best_df)
+    avail_df = normalize_column_names(avail_df)
 
     best_full_name_col = find_col(best_df, NAME_CANDIDATES)
     best_first_name_col = find_col(best_df, FIRST_NAME_CANDIDATES)
@@ -174,7 +78,7 @@ def load_people(
     def build_key_df(df, full_name_col, first_col, last_col, yob_col):
         keys = []
         for _, row in df.iterrows():
-            first, last = _split_name(row, first_col or "", last_col, full_name_col)
+            first, last = split_name(row, first_col or "", last_col, full_name_col)
             full = f"{first} {last}".strip()
             yob = None
             if yob_col and yob_col in row:
@@ -245,8 +149,7 @@ def load_people(
         best_row = best_df.iloc[best_row_idx]
         avail_row = avail_df.iloc[avail_row_idx]
 
-        # Identity fields
-        first, last = _split_name(
+        first, last = split_name(
             best_row,
             best_first_name_col or "",
             best_last_name_col,
@@ -282,10 +185,10 @@ def load_people(
                         yob = None
 
         # Stroke times
-        freestyle_50 = _parse_time_to_seconds(best_row[stroke_cols["freestyle_50"]]) if "freestyle_50" in stroke_cols else None
-        backstroke_50 = _parse_time_to_seconds(best_row[stroke_cols["backstroke_50"]]) if "backstroke_50" in stroke_cols else None
-        breaststroke_50 = _parse_time_to_seconds(best_row[stroke_cols["breaststroke_50"]]) if "breaststroke_50" in stroke_cols else None
-        butterfly_50 = _parse_time_to_seconds(best_row[stroke_cols["butterfly_50"]]) if "butterfly_50" in stroke_cols else None
+        freestyle_50 = parse_time_to_seconds(best_row[stroke_cols["freestyle_50"]]) if "freestyle_50" in stroke_cols else None
+        backstroke_50 = parse_time_to_seconds(best_row[stroke_cols["backstroke_50"]]) if "backstroke_50" in stroke_cols else None
+        breaststroke_50 = parse_time_to_seconds(best_row[stroke_cols["breaststroke_50"]]) if "breaststroke_50" in stroke_cols else None
+        butterfly_50 = parse_time_to_seconds(best_row[stroke_cols["butterfly_50"]]) if "butterfly_50" in stroke_cols else None
 
         # Availability flags: True if cell is not empty, False otherwise
         availability = {}
@@ -298,7 +201,7 @@ def load_people(
         # Medical date (dd/mm/yyyy from names sheet)
         medical_date = None
         if avail_medical_col and avail_medical_col in avail_row:
-            medical_date = _parse_medical_date(avail_row[avail_medical_col])
+            medical_date = parse_medical_date(avail_row[avail_medical_col])
 
         # Age from year of birth (current year at load time)
         age = (date.today().year - yob) if yob is not None else None
@@ -329,13 +232,7 @@ def load_people_from_names_only(names_relays_path: str | Path) -> List[Person]:
     """
     names_relays_path = Path(names_relays_path)
     avail_df = pd.read_excel(names_relays_path)
-    avail_df = _normalize_column_names(avail_df)
-
-    def find_col(df, candidates):
-        for c in candidates:
-            if c in df.columns:
-                return c
-        return None
+    avail_df = normalize_column_names(avail_df)
 
     avail_full_name_col = find_col(avail_df, NAME_CANDIDATES)
     avail_first_name_col = find_col(avail_df, FIRST_NAME_CANDIDATES)
@@ -366,7 +263,7 @@ def load_people_from_names_only(names_relays_path: str | Path) -> List[Person]:
 
     people: List[Person] = []
     for _, avail_row in avail_df.iterrows():
-        first, last = _split_name(
+        first, last = split_name(
             avail_row,
             avail_first_name_col or "",
             avail_last_name_col,
@@ -401,7 +298,7 @@ def load_people_from_names_only(names_relays_path: str | Path) -> List[Person]:
 
         medical_date = None
         if avail_medical_col and avail_medical_col in avail_row:
-            medical_date = _parse_medical_date(avail_row[avail_medical_col])
+            medical_date = parse_medical_date(avail_row[avail_medical_col])
 
         age = (date.today().year - yob) if yob is not None else None
         people.append(
@@ -429,13 +326,7 @@ def load_people_from_best_times_only(best_times_path: str | Path) -> List[Person
     """
     best_times_path = Path(best_times_path)
     best_df = pd.read_excel(best_times_path)
-    best_df = _normalize_column_names(best_df)
-
-    def find_col(df, candidates):
-        for c in candidates:
-            if c in df.columns:
-                return c
-        return None
+    best_df = normalize_column_names(best_df)
 
     best_full_name_col = find_col(best_df, NAME_CANDIDATES)
     best_first_name_col = find_col(best_df, FIRST_NAME_CANDIDATES)
@@ -457,7 +348,7 @@ def load_people_from_best_times_only(best_times_path: str | Path) -> List[Person
 
     people: List[Person] = []
     for _, best_row in best_df.iterrows():
-        first, last = _split_name(
+        first, last = split_name(
             best_row,
             best_first_name_col or "",
             best_last_name_col,
@@ -466,10 +357,10 @@ def load_people_from_best_times_only(best_times_path: str | Path) -> List[Person
         if not first and not last:
             continue
 
-        freestyle_50 = _parse_time_to_seconds(best_row[stroke_cols["freestyle_50"]]) if "freestyle_50" in stroke_cols else None
-        backstroke_50 = _parse_time_to_seconds(best_row[stroke_cols["backstroke_50"]]) if "backstroke_50" in stroke_cols else None
-        breaststroke_50 = _parse_time_to_seconds(best_row[stroke_cols["breaststroke_50"]]) if "breaststroke_50" in stroke_cols else None
-        butterfly_50 = _parse_time_to_seconds(best_row[stroke_cols["butterfly_50"]]) if "butterfly_50" in stroke_cols else None
+        freestyle_50 = parse_time_to_seconds(best_row[stroke_cols["freestyle_50"]]) if "freestyle_50" in stroke_cols else None
+        backstroke_50 = parse_time_to_seconds(best_row[stroke_cols["backstroke_50"]]) if "backstroke_50" in stroke_cols else None
+        breaststroke_50 = parse_time_to_seconds(best_row[stroke_cols["breaststroke_50"]]) if "breaststroke_50" in stroke_cols else None
+        butterfly_50 = parse_time_to_seconds(best_row[stroke_cols["butterfly_50"]]) if "butterfly_50" in stroke_cols else None
 
         people.append(
             Person(

@@ -13,6 +13,7 @@ def ensure_database(db_path: str | Path) -> None:
     """Create the swimmers database if it does not exist and run migrations."""
     create_database(db_path)
     _migrate_swimmers_medical(db_path)
+    _migrate_swimmer_meet_availability(db_path)
 
 
 def _migrate_swimmers_medical(db_path: str | Path) -> None:
@@ -26,6 +27,46 @@ def _migrate_swimmers_medical(db_path: str | Path) -> None:
         columns = [row[1] for row in cur.fetchall()]
         if "medical_date" not in columns:
             cur.execute("ALTER TABLE swimmers ADD COLUMN medical_date TEXT")
+        conn.commit()
+
+
+def _migrate_swimmer_meet_availability(db_path: str | Path) -> None:
+    """Create swimmer_meet_availability table and backfill from swimmers.availability_json."""
+    path = Path(db_path)
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS swimmer_meet_availability (
+                swimmer_id INTEGER NOT NULL,
+                competition_id INTEGER NOT NULL,
+                availability_json TEXT NOT NULL,
+                PRIMARY KEY (swimmer_id, competition_id),
+                FOREIGN KEY (swimmer_id) REFERENCES swimmers(id) ON DELETE CASCADE,
+                FOREIGN KEY (competition_id) REFERENCES competitions(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.commit()
+        # Backfill: for each swimmer and each competition, copy current availability if not already present
+        cur.execute("SELECT COUNT(*) FROM swimmer_meet_availability")
+        if cur.fetchone()[0] > 0:
+            conn.commit()
+            return
+        cur.execute(
+            "SELECT id, availability_json FROM swimmers WHERE COALESCE(availability_json, '') != '' AND availability_json != '{}'"
+        )
+        swimmers_with_avail = cur.fetchall()
+        cur.execute("SELECT id FROM competitions")
+        competition_ids = [row[0] for row in cur.fetchall()]
+        for swimmer_id, availability_json in swimmers_with_avail:
+            for competition_id in competition_ids:
+                cur.execute(
+                    "INSERT OR IGNORE INTO swimmer_meet_availability (swimmer_id, competition_id, availability_json) VALUES (?, ?, ?)",
+                    (swimmer_id, competition_id, availability_json or "{}"),
+                )
         conn.commit()
 
 
@@ -103,8 +144,55 @@ def _row_to_swimmer_dict(row: tuple) -> Dict[str, Any]:
     }
 
 
-def load_all(db_path: str | Path) -> List[Dict[str, Any]]:
-    """Load all swimmers, ordered by first name A-Z."""
+def get_availability_for_meet(
+    db_path: str | Path, competition_id: int
+) -> Dict[int, Dict[str, bool]]:
+    """Return swimmer_id -> availability dict for the given competition."""
+    path = Path(db_path)
+    if not path.exists():
+        return {}
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT swimmer_id, availability_json FROM swimmer_meet_availability WHERE competition_id = ?",
+            (competition_id,),
+        )
+        out = {}
+        for swimmer_id, availability_json in cur.fetchall():
+            out[swimmer_id] = json.loads(availability_json) if availability_json else {}
+        return out
+
+
+def set_swimmer_availability_for_meet(
+    db_path: str | Path,
+    swimmer_id: int,
+    competition_id: int,
+    availability: Dict[str, bool],
+) -> None:
+    """Set availability for one swimmer at one meet (upsert)."""
+    path = Path(db_path)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO swimmer_meet_availability (swimmer_id, competition_id, availability_json)
+            VALUES (?, ?, ?)
+            ON CONFLICT(swimmer_id, competition_id) DO UPDATE SET availability_json = excluded.availability_json
+            """,
+            (swimmer_id, competition_id, json.dumps(availability, ensure_ascii=False)),
+        )
+        conn.commit()
+
+
+def load_all(
+    db_path: str | Path,
+    competition_id: int | None = None,
+) -> List[Dict[str, Any]]:
+    """
+    Load all swimmers, ordered by first name A-Z.
+    If competition_id is set, merge availability for that meet from swimmer_meet_availability.
+    Otherwise availability is {} for each swimmer.
+    """
     path = Path(db_path)
     if not path.exists():
         return []
@@ -114,16 +202,53 @@ def load_all(db_path: str | Path) -> List[Dict[str, Any]]:
             """
             SELECT id, first_name, last_name, gender, year_of_birth,
                    freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
-                   availability_json, medical_date
+                   medical_date
             FROM swimmers
             ORDER BY first_name, last_name
             """
         )
-        return [_row_to_swimmer_dict(row) for row in cur.fetchall()]
+        rows = cur.fetchall()
+    # Build list with id, ..., medical_date only (no availability_json in SELECT)
+    swimmers = []
+    for row in rows:
+        (
+            id_,
+            first_name,
+            last_name,
+            gender,
+            year_of_birth,
+            freestyle_50,
+            backstroke_50,
+            breaststroke_50,
+            butterfly_50,
+            medical_date,
+        ) = row
+        full_name = f"{first_name or ''} {last_name or ''}".strip()
+        age = (date.today().year - year_of_birth) if year_of_birth is not None else None
+        swimmers.append({
+            "id": id_,
+            "first_name": first_name or "",
+            "last_name": last_name or "",
+            "full_name": full_name,
+            "gender": gender,
+            "year_of_birth": year_of_birth,
+            "age": age,
+            "freestyle_50": freestyle_50,
+            "backstroke_50": backstroke_50,
+            "breaststroke_50": breaststroke_50,
+            "butterfly_50": butterfly_50,
+            "availability": {},
+            "medical_date": medical_date,
+        })
+    if competition_id is not None:
+        avail_by_swimmer = get_availability_for_meet(db_path, competition_id)
+        for s in swimmers:
+            s["availability"] = avail_by_swimmer.get(s["id"], {})
+    return swimmers
 
 
 def insert_one(db_path: str | Path, person: Person) -> int:
-    """Insert a single Person and return the new row id."""
+    """Insert a single Person. Availability is not stored here; use set_swimmer_availability_for_meet per meet."""
     path = Path(db_path)
     with sqlite3.connect(path) as conn:
         cur = conn.cursor()
@@ -145,7 +270,7 @@ def insert_one(db_path: str | Path, person: Person) -> int:
                 person.backstroke_50,
                 person.breaststroke_50,
                 person.butterfly_50,
-                json.dumps(person.availability, ensure_ascii=False),
+                "{}",
                 person.medical_date or None,
             ),
         )
@@ -232,54 +357,6 @@ def delete_competitions(db_path: str | Path, ids: List[int]) -> None:
         conn.commit()
 
 
-def update_swimmer(
-    db_path: str | Path,
-    id_: int,
-    *,
-    first_name: str | None = None,
-    last_name: str | None = None,
-    gender: str | None = None,
-    year_of_birth: int | None = None,
-    freestyle_50: float | None = None,
-    backstroke_50: float | None = None,
-    breaststroke_50: float | None = None,
-    butterfly_50: float | None = None,
-    availability: Dict[str, bool] | None = None,
-    medical_date: str | None = None,
-) -> None:
-    """Update a single swimmer by id."""
-    path = Path(db_path)
-    updates = []
-    args = []
-    if first_name is not None:
-        updates.append("first_name = ?"); args.append(first_name)
-    if last_name is not None:
-        updates.append("last_name = ?"); args.append(last_name)
-    if gender is not None:
-        updates.append("gender = ?"); args.append(gender)
-    if year_of_birth is not None:
-        updates.append("year_of_birth = ?"); args.append(year_of_birth)
-    if freestyle_50 is not None:
-        updates.append("freestyle_50 = ?"); args.append(freestyle_50)
-    if backstroke_50 is not None:
-        updates.append("backstroke_50 = ?"); args.append(backstroke_50)
-    if breaststroke_50 is not None:
-        updates.append("breaststroke_50 = ?"); args.append(breaststroke_50)
-    if butterfly_50 is not None:
-        updates.append("butterfly_50 = ?"); args.append(butterfly_50)
-    if availability is not None:
-        updates.append("availability_json = ?"); args.append(json.dumps(availability, ensure_ascii=False))
-    if medical_date is not None:
-        updates.append("medical_date = ?"); args.append(medical_date or None)
-    if not updates:
-        return
-    args.append(id_)
-    with sqlite3.connect(path) as conn:
-        cur = conn.cursor()
-        cur.execute(f"UPDATE swimmers SET {', '.join(updates)} WHERE id = ?", args)
-        conn.commit()
-
-
 def insert_people(db_path: str | Path, people: Iterable[Person]) -> None:
     """Insert a collection of Person records into the SQLite database."""
     path = Path(db_path)
@@ -295,7 +372,7 @@ def insert_people(db_path: str | Path, people: Iterable[Person]) -> None:
                 p.backstroke_50,
                 p.breaststroke_50,
                 p.butterfly_50,
-                json.dumps(p.availability, ensure_ascii=False),
+                "{}",
                 p.medical_date or None,
             )
             for p in people
@@ -333,10 +410,9 @@ def update_swimmer(
     backstroke_50: float | None = None,
     breaststroke_50: float | None = None,
     butterfly_50: float | None = None,
-    availability: Dict[str, bool] | None = None,
     medical_date: str | None = None,
 ) -> None:
-    """Update a single swimmer by id. Only provided fields are updated."""
+    """Update a single swimmer by id (global attributes only). Use set_swimmer_availability_for_meet for availability."""
     path = Path(db_path)
     updates = []
     args = []
@@ -364,9 +440,6 @@ def update_swimmer(
     if butterfly_50 is not None:
         updates.append("butterfly_50 = ?")
         args.append(butterfly_50)
-    if availability is not None:
-        updates.append("availability_json = ?")
-        args.append(json.dumps(availability, ensure_ascii=False))
     if medical_date is not None:
         updates.append("medical_date = ?")
         args.append(medical_date or None)
