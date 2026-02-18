@@ -143,6 +143,7 @@
           command: 'delete-swimmers',
           dbPath: state.dbPath,
           payload: { ids },
+          competitionId: state.selectedMeetId ?? undefined,
         });
         if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
           window.RelayApp.swimmers.renderSwimmers(data.swimmers);

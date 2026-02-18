@@ -38,10 +38,16 @@
     if (!s) return;
     swimmerBeingEdited = s;
     modalName.textContent = s.full_name;
+    const hasMeet = state.selectedMeetId != null;
     const avail = s.availability || {};
-    const availList = Object.entries(avail)
-      .map(([k, v]) => `<li><span>${utils.escapeHtml(k)}</span><span>${v ? 'Yes' : 'No'}</span></li>`)
-      .join('');
+    const availList = hasMeet
+      ? Object.entries(avail)
+          .map(([k, v]) => `<li><span>${utils.escapeHtml(k)}</span><span>${v ? 'Yes' : 'No'}</span></li>`)
+          .join('')
+      : '';
+    const availabilityHtml = hasMeet
+      ? `<dt>Availability</dt><dd><ul class="availability-list">${availList || '<li>–</li>'}</ul></dd>`
+      : '<dt>Availability</dt><dd class="text-muted">Select a meet to see availability.</dd>';
     const medicalStr = s.medical_date && String(s.medical_date).trim() ? utils.escapeHtml(String(s.medical_date).slice(0, 10)) : '–';
     modalBody.innerHTML = `
       <dl>
@@ -55,8 +61,7 @@
         <dt>50 Back</dt><dd>${utils.formatTime(s.backstroke_50)}</dd>
         <dt>50 Breast</dt><dd>${utils.formatTime(s.breaststroke_50)}</dd>
         <dt>50 Fly</dt><dd>${utils.formatTime(s.butterfly_50)}</dd>
-        <dt>Availability</dt>
-        <dd><ul class="availability-list">${availList || '<li>–</li>'}</ul></dd>
+        ${availabilityHtml}
       </dl>
     `;
     modalFooter.classList.toggle('hidden', !s.id);
@@ -99,8 +104,8 @@
         <input type="number" id="edit-breaststroke" step="0.01" min="0" placeholder="50 Breast" />
         <input type="number" id="edit-butterfly" step="0.01" min="0" placeholder="50 Fly" />
       </div>
-      <div class="form-group availability-checkboxes">
-        <label>Availability</label>
+      <div class="form-group availability-checkboxes" id="edit-availability-section">
+        <label>Availability <span class="availability-meet-hint text-muted"></span></label>
         <div class="availability-checkboxes-inner">${availCheckboxes}</div>
       </div>
     `;
@@ -120,11 +125,21 @@
     document.getElementById('edit-backstroke').value = swimmer.backstroke_50 != null ? swimmer.backstroke_50 : '';
     document.getElementById('edit-breaststroke').value = swimmer.breaststroke_50 != null ? swimmer.breaststroke_50 : '';
     document.getElementById('edit-butterfly').value = swimmer.butterfly_50 != null ? swimmer.butterfly_50 : '';
-    const avail = swimmer.availability || {};
-    AVAILABILITY_KEYS.forEach((k) => {
-      const cb = editSwimmerForm.querySelector(`input[name="avail-${k}"]`);
-      if (cb) cb.checked = !!avail[k];
-    });
+    const availSection = editSwimmerForm.querySelector('#edit-availability-section');
+    const hintSpan = editSwimmerForm.querySelector('.availability-meet-hint');
+    if (state.selectedMeetId != null) {
+      if (availSection) availSection.classList.remove('hidden');
+      if (hintSpan) hintSpan.textContent = '(for current meet only)';
+      const avail = swimmer.availability || {};
+      AVAILABILITY_KEYS.forEach((k) => {
+        const cb = editSwimmerForm.querySelector(`input[name="avail-${k}"]`);
+        if (cb) { cb.checked = !!avail[k]; cb.disabled = false; }
+      });
+    } else {
+      if (availSection) availSection.classList.add('hidden');
+      if (hintSpan) hintSpan.textContent = '';
+      editSwimmerForm.querySelectorAll('input[name^="avail-"]').forEach((cb) => { cb.disabled = true; });
+    }
     modalOverlay.classList.add('hidden');
     editModalOverlay.classList.remove('hidden');
   }
@@ -144,12 +159,7 @@
     const backstroke_50 = document.getElementById('edit-backstroke').value.trim();
     const breaststroke_50 = document.getElementById('edit-breaststroke').value.trim();
     const butterfly_50 = document.getElementById('edit-butterfly').value.trim();
-    const availability = {};
-    AVAILABILITY_KEYS.forEach((k) => {
-      const cb = editSwimmerForm.querySelector(`input[name="avail-${k}"]`);
-      availability[k] = cb ? cb.checked : false;
-    });
-    return {
+    const payload = {
       id: swimmerBeingEdited.id,
       first_name,
       last_name,
@@ -160,8 +170,16 @@
       backstroke_50: backstroke_50 === '' ? null : parseFloat(backstroke_50),
       breaststroke_50: breaststroke_50 === '' ? null : parseFloat(breaststroke_50),
       butterfly_50: butterfly_50 === '' ? null : parseFloat(butterfly_50),
-      availability,
     };
+    if (state.selectedMeetId != null) {
+      const availability = {};
+      AVAILABILITY_KEYS.forEach((k) => {
+        const cb = editSwimmerForm.querySelector(`input[name="avail-${k}"]`);
+        availability[k] = cb ? cb.checked : false;
+      });
+      payload.availability = availability;
+    }
+    return payload;
   }
 
   if (modalEditBtn) {
@@ -195,7 +213,7 @@
       try {
         await api.ensureDbPath();
         const payload = getEditFormPayload();
-        await window.electronAPI.runBackend({ command: 'update-swimmer', dbPath: state.dbPath, payload });
+        await window.electronAPI.runBackend({ command: 'update-swimmer', dbPath: state.dbPath, payload, competitionId: state.selectedMeetId ?? undefined });
         await api.loadSwimmers();
         closeEditModal();
         swimmerBeingEdited = null;
@@ -245,6 +263,7 @@
           command: 'add-competition',
           dbPath: state.dbPath,
           payload: { name, start_date: start, end_date: end, location },
+          competitionId: state.selectedMeetId ?? undefined,
         });
         if (window.RelayApp.meetSelector && window.RelayApp.meetSelector.renderCompetitions) {
           window.RelayApp.meetSelector.renderCompetitions(data.competitions);
@@ -355,12 +374,6 @@
       const backstroke_50 = document.getElementById('new-backstroke') && document.getElementById('new-backstroke').value.trim();
       const breaststroke_50 = document.getElementById('new-breaststroke') && document.getElementById('new-breaststroke').value.trim();
       const butterfly_50 = document.getElementById('new-butterfly') && document.getElementById('new-butterfly').value.trim();
-      const availability = {};
-      AVAILABILITY_KEYS.forEach((k) => {
-        const cb = addSwimmerAvailability && addSwimmerAvailability.querySelector(`input[name="new-avail-${k}"]`);
-        availability[k] = cb ? cb.checked : false;
-      });
-
       const payload = {
         first_name,
         last_name,
@@ -371,8 +384,15 @@
         backstroke_50: backstroke_50 === '' ? undefined : parseFloat(backstroke_50),
         breaststroke_50: breaststroke_50 === '' ? undefined : parseFloat(breaststroke_50),
         butterfly_50: butterfly_50 === '' ? undefined : parseFloat(butterfly_50),
-        availability: Object.keys(availability).length ? availability : undefined,
       };
+      if (state.selectedMeetId != null) {
+        const availability = {};
+        AVAILABILITY_KEYS.forEach((k) => {
+          const cb = addSwimmerAvailability && addSwimmerAvailability.querySelector(`input[name="new-avail-${k}"]`);
+          availability[k] = cb ? cb.checked : false;
+        });
+        if (Object.keys(availability).length) payload.availability = availability;
+      }
 
       api.setLoading('Adding swimmer…');
       try {
@@ -381,6 +401,7 @@
           command: 'add-swimmer',
           dbPath: state.dbPath,
           payload,
+          competitionId: state.selectedMeetId ?? undefined,
         });
         state.currentSwimmers = data.swimmers || [];
         if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {

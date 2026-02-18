@@ -67,11 +67,15 @@ def cmd_import_files(
     db_path: Path,
     best_times_path: str | None,
     names_relays_path: str | None,
+    competition_id: int | None = None,
 ) -> dict:
+    """
+    Import from Excel. Availability from file is applied only when competition_id is set (current meet).
+    """
     if not best_times_path and not names_relays_path:
         raise ValueError("import-files requires at least one of --best-times or --names-relays")
     relay_db.ensure_database(db_path)
-    existing = relay_db.load_all(db_path)
+    existing = relay_db.load_all(db_path, competition_id=competition_id)
     name_to_id = {}
     id_to_row = {}
     for row in existing:
@@ -109,14 +113,30 @@ def cmd_import_files(
                         backstroke_50=p.backstroke_50,
                         breaststroke_50=p.breaststroke_50,
                         butterfly_50=p.butterfly_50,
-                        availability=p.availability,
                         medical_date=getattr(p, "medical_date", None),
                     )
                     updated += 1
+                    if competition_id is not None and p.availability:
+                        relay_db.set_swimmer_availability_for_meet(db_path, sid, competition_id, p.availability)
             else:
-                new_id = relay_db.insert_one(db_path, p)
+                person = Person(
+                    first_name=p.first_name,
+                    last_name=p.last_name,
+                    gender=p.gender,
+                    year_of_birth=p.year_of_birth,
+                    age=p.age,
+                    freestyle_50=p.freestyle_50,
+                    backstroke_50=p.backstroke_50,
+                    breaststroke_50=p.breaststroke_50,
+                    butterfly_50=p.butterfly_50,
+                    availability={},
+                    medical_date=getattr(p, "medical_date", None),
+                )
+                new_id = relay_db.insert_one(db_path, person)
                 name_to_id[key] = new_id
                 added += 1
+                if competition_id is not None and p.availability:
+                    relay_db.set_swimmer_availability_for_meet(db_path, new_id, competition_id, p.availability)
 
     elif names_relays_path:
         names = Path(names_relays_path)
@@ -136,14 +156,30 @@ def cmd_import_files(
                         last_name=p.last_name,
                         gender=p.gender,
                         year_of_birth=p.year_of_birth,
-                        availability=p.availability,
                         medical_date=getattr(p, "medical_date", None),
                     )
                     updated += 1
+                    if competition_id is not None and p.availability:
+                        relay_db.set_swimmer_availability_for_meet(db_path, sid, competition_id, p.availability)
             else:
-                new_id = relay_db.insert_one(db_path, p)
+                person = Person(
+                    first_name=p.first_name,
+                    last_name=p.last_name,
+                    gender=p.gender,
+                    year_of_birth=p.year_of_birth,
+                    age=p.age,
+                    freestyle_50=None,
+                    backstroke_50=None,
+                    breaststroke_50=None,
+                    butterfly_50=None,
+                    availability={},
+                    medical_date=getattr(p, "medical_date", None),
+                )
+                new_id = relay_db.insert_one(db_path, person)
                 name_to_id[key] = new_id
                 added += 1
+                if competition_id is not None and p.availability:
+                    relay_db.set_swimmer_availability_for_meet(db_path, new_id, competition_id, p.availability)
 
     else:
         best = Path(best_times_path)
@@ -170,7 +206,7 @@ def cmd_import_files(
             else:
                 skipped.append(f"{p.first_name} {p.last_name}".strip())
 
-    swimmers = relay_db.load_all(db_path)
+    swimmers = relay_db.load_all(db_path, competition_id=competition_id)
     out = {
         "swimmers": swimmers,
         "imported": added,

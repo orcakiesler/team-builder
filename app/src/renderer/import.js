@@ -75,6 +75,7 @@
           dbPath: state.dbPath,
           bestTimesPath: bestTimesPath || undefined,
           namesRelaysPath: namesRelaysPath || undefined,
+          competitionId: state.selectedMeetId ?? undefined,
         });
         if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
           window.RelayApp.swimmers.renderSwimmers(data.swimmers);

@@ -53,32 +53,48 @@ def main() -> None:
         default=None,
         help="YYYY-MM-DD; used to filter swimmers with valid medical",
     )
+    parser.add_argument(
+        "--competition-id",
+        type=int,
+        default=None,
+        help="Current meet id; required for availability (list/build/import/update/add-swimmer)",
+    )
     args = parser.parse_args()
 
     try:
         db_path_str = os.environ.get("RELAY_DB_PATH") or args.db
         if db_path_str and args.command:
             db_path = Path(db_path_str).resolve()
+            comp_id = args.competition_id
             if args.command == "list-swimmers":
-                out = cmd_list_swimmers(db_path)
+                out = cmd_list_swimmers(db_path, competition_id=comp_id)
             elif args.command == "build-teams":
-                out = cmd_build_teams(db_path, args.reference_year, args.meet_start_date)
+                out = cmd_build_teams(db_path, args.reference_year, args.meet_start_date, competition_id=comp_id)
             elif args.command == "import-files":
                 if not args.best_times and not args.names_relays:
                     raise ValueError(
                         "import-files requires at least one of --best-times or --names-relays"
                     )
-                out = cmd_import_files(db_path, args.best_times, args.names_relays)
+                out = cmd_import_files(db_path, args.best_times, args.names_relays, competition_id=comp_id)
             elif args.command == "update-swimmer":
-                out = cmd_update_swimmer(db_path, json.load(sys.stdin))
+                payload = json.load(sys.stdin)
+                if comp_id is not None:
+                    payload["competition_id"] = comp_id
+                out = cmd_update_swimmer(db_path, payload)
             elif args.command == "delete-swimmers":
-                out = cmd_delete_swimmers(db_path, json.load(sys.stdin))
+                payload = json.load(sys.stdin)
+                if comp_id is not None:
+                    payload["competition_id"] = comp_id
+                out = cmd_delete_swimmers(db_path, payload)
             elif args.command == "list-competitions":
                 out = cmd_list_competitions(db_path)
             elif args.command == "add-competition":
                 out = cmd_add_competition(db_path, json.load(sys.stdin))
             elif args.command == "add-swimmer":
-                out = cmd_add_swimmer(db_path, json.load(sys.stdin))
+                payload = json.load(sys.stdin)
+                if comp_id is not None:
+                    payload["competition_id"] = comp_id
+                out = cmd_add_swimmer(db_path, payload)
             elif args.command == "delete-competitions":
                 out = cmd_delete_competitions(db_path, json.load(sys.stdin))
             else:

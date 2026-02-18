@@ -35,6 +35,27 @@
 
   async function applyLastTeamsForMeet(meetId) {
     if (meetId == null) return;
+    // Always refetch swimmers for the selected meet so list and availability are up to date
+    try {
+      await api.ensureDbPath();
+      const data = await window.electronAPI.runBackend({
+        command: 'list-swimmers',
+        dbPath: state.dbPath,
+        competitionId: meetId,
+      });
+      state.currentSwimmers = data.swimmers || [];
+      if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
+        window.RelayApp.swimmers.renderSwimmers(state.currentSwimmers);
+      }
+    } catch (_) {
+      state.currentSwimmers = [];
+      if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
+        window.RelayApp.swimmers.renderSwimmers([]);
+      }
+    }
+    if (resultsSection) resultsSection.classList.remove('hidden');
+
+    // Use cached teams for this meet if we have them; otherwise clear teams panel
     const byMeet = window.RelayApp.getLastTeamsByMeet();
     const saved = byMeet[meetId];
     if (saved && saved.teams) {
@@ -42,29 +63,11 @@
       if (window.RelayApp.teams && window.RelayApp.teams.renderTeams) {
         window.RelayApp.teams.renderTeams(saved.teams);
       }
-      if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
-        window.RelayApp.swimmers.renderSwimmers(saved.swimmers || []);
-      }
-      if (resultsSection) resultsSection.classList.remove('hidden');
     } else {
       state.lastTeamsResult = null;
       if (window.RelayApp.teams && window.RelayApp.teams.renderTeams) {
         window.RelayApp.teams.renderTeams(null);
       }
-      try {
-        await api.ensureDbPath();
-        const data = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath: state.dbPath });
-        state.currentSwimmers = data.swimmers || [];
-        if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
-          window.RelayApp.swimmers.renderSwimmers(state.currentSwimmers);
-        }
-      } catch (_) {
-        state.currentSwimmers = [];
-        if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
-          window.RelayApp.swimmers.renderSwimmers([]);
-        }
-      }
-      if (resultsSection) resultsSection.classList.remove('hidden');
     }
   }
 
@@ -106,13 +109,18 @@
       cb.addEventListener('change', (e) => { e.stopPropagation(); updateRemoveCompetitionsButtonVisibility(); });
     });
     meetDropdownList.querySelectorAll('.meet-dropdown-item').forEach((row) => {
-      row.addEventListener('click', (e) => {
+      row.addEventListener('click', async (e) => {
         if (e.target.type === 'checkbox') return;
         state.selectedMeetId = parseInt(row.getAttribute('data-id'), 10);
         window.RelayApp.setLastMeetId(state.selectedMeetId);
         updateMeetTriggerText();
         closeMeetDropdown();
-        applyLastTeamsForMeet(state.selectedMeetId);
+        api.setLoading('Loading meet…');
+        try {
+          await applyLastTeamsForMeet(state.selectedMeetId);
+        } finally {
+          api.clearLoading();
+        }
       });
     });
     if (!state.currentCompetitions.some((c) => c.id === state.selectedMeetId)) {
@@ -145,6 +153,7 @@
           command: 'delete-competitions',
           dbPath: state.dbPath,
           payload: { ids },
+          competitionId: state.selectedMeetId ?? undefined,
         });
         if (ids.includes(state.selectedMeetId)) state.selectedMeetId = null;
         closeMeetDropdown();

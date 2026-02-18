@@ -53,17 +53,18 @@ def cmd_build_teams(
     db_path: Path,
     reference_year: int | None = None,
     meet_start_date: str | None = None,
+    competition_id: int | None = None,
 ) -> dict:
     relay_db.ensure_database(db_path)
     reference_year = reference_year or date.today().year
-    people = people_from_db(db_path)
+    people = people_from_db(db_path, competition_id=competition_id)
     if meet_start_date:
         people = [
             p
             for p in people
             if _is_medical_valid(getattr(p, "medical_date", None), meet_start_date)
         ]
-    swimmers_with_id = relay_db.load_all(db_path)
+    swimmers_with_id = relay_db.load_all(db_path, competition_id=competition_id)
     teams_by_event = {}
     for event_name, filter_func, build_func, is_medley in EVENT_CONFIGS:
         available = filter_func(people)

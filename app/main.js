@@ -101,6 +101,9 @@ function runBackendCommand(options) {
   if (command === 'build-teams' && options.meetStartDate) {
     args.push('--meet-start-date', options.meetStartDate);
   }
+  if (options.competitionId != null && ['list-swimmers', 'build-teams', 'import-files', 'update-swimmer', 'delete-swimmers', 'add-swimmer'].includes(command)) {
+    args.push('--competition-id', String(options.competitionId));
+  }
 
   return new Promise((resolve, reject) => {
     const stdio = useStdin ? ['pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'];

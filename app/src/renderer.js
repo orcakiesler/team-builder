@@ -25,6 +25,7 @@
           command: 'build-teams',
           dbPath: state.dbPath,
           meetStartDate: meetStartDate || undefined,
+          competitionId: state.selectedMeetId ?? undefined,
         });
         state.lastTeamsResult = data;
         if (data.swimmers && Array.isArray(data.swimmers)) {

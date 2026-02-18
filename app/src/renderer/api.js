@@ -33,7 +33,7 @@
     setLoading('Loading swimmers…');
     try {
       await ensureDbPath();
-      const data = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath: state.dbPath });
+      const data = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath: state.dbPath, competitionId: state.selectedMeetId ?? undefined });
       state.currentSwimmers = data.swimmers || [];
       if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
         window.RelayApp.swimmers.renderSwimmers(state.currentSwimmers);

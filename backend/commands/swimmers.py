@@ -54,14 +54,15 @@ def optional_float(val):
         return None
 
 
-def people_from_db(db_path: Path) -> list[Person]:
-    rows = relay_db.load_all(db_path)
+def people_from_db(db_path: Path, competition_id: int | None = None) -> list[Person]:
+    """Load swimmers as Person list; if competition_id is set, availability is for that meet."""
+    rows = relay_db.load_all(db_path, competition_id=competition_id)
     return [swimmer_dict_to_person(r) for r in rows]
 
 
-def cmd_list_swimmers(db_path: Path) -> dict:
+def cmd_list_swimmers(db_path: Path, competition_id: int | None = None) -> dict:
     relay_db.ensure_database(db_path)
-    return {"swimmers": relay_db.load_all(db_path)}
+    return {"swimmers": relay_db.load_all(db_path, competition_id=competition_id)}
 
 
 def cmd_update_swimmer(db_path: Path, payload: dict) -> dict:
@@ -69,6 +70,11 @@ def cmd_update_swimmer(db_path: Path, payload: dict) -> dict:
     if swimmer_id is None:
         raise ValueError("Missing 'id' in update payload")
     relay_db.ensure_database(db_path)
+
+    competition_id = payload.get("competition_id")
+    availability = payload.get("availability") if isinstance(payload.get("availability"), dict) else None
+    if availability is not None and competition_id is None:
+        raise ValueError("Availability can only be set when a meet is selected (competition_id required)")
 
     kwargs = {}
     if "first_name" in payload:
@@ -87,13 +93,14 @@ def cmd_update_swimmer(db_path: Path, payload: dict) -> dict:
         kwargs["breaststroke_50"] = payload["breaststroke_50"]
     if "butterfly_50" in payload:
         kwargs["butterfly_50"] = payload["butterfly_50"]
-    if "availability" in payload:
-        kwargs["availability"] = payload["availability"]
     if "medical_date" in payload:
         kwargs["medical_date"] = payload["medical_date"] or None
 
     relay_db.update_swimmer(db_path, int(swimmer_id), **kwargs)
-    updated = relay_db.load_all(db_path)
+    if competition_id is not None and availability is not None:
+        relay_db.set_swimmer_availability_for_meet(db_path, int(swimmer_id), int(competition_id), availability)
+
+    updated = relay_db.load_all(db_path, competition_id=int(competition_id) if competition_id is not None else None)
     one = next((s for s in updated if s["id"] == int(swimmer_id)), None)
     return {"swimmer": one} if one else {"swimmer": None}
 
@@ -127,6 +134,11 @@ def cmd_add_swimmer(db_path: Path, payload: dict) -> dict:
     availability = payload.get("availability")
     if not isinstance(availability, dict):
         availability = {}
+    competition_id = payload.get("competition_id")
+    if payload.get("availability") is not None and competition_id is None:
+        raise ValueError("Availability can only be set when a meet is selected (competition_id required)")
+    availability = payload.get("availability") if isinstance(payload.get("availability"), dict) else {}
+
     person = Person(
         first_name=first_name,
         last_name=last_name,
@@ -137,18 +149,21 @@ def cmd_add_swimmer(db_path: Path, payload: dict) -> dict:
         backstroke_50=backstroke_50,
         breaststroke_50=breaststroke_50,
         butterfly_50=butterfly_50,
-        availability=availability,
+        availability={},
         medical_date=medical_date,
     )
     relay_db.ensure_database(db_path)
-    relay_db.insert_one(db_path, person)
-    return {"swimmers": relay_db.load_all(db_path)}
+    new_id = relay_db.insert_one(db_path, person)
+    if competition_id is not None and availability:
+        relay_db.set_swimmer_availability_for_meet(db_path, new_id, int(competition_id), availability)
+    return {"swimmers": relay_db.load_all(db_path, competition_id=int(competition_id) if competition_id is not None else None)}
 
 
 def cmd_delete_swimmers(db_path: Path, payload: dict) -> dict:
     ids = payload.get("ids") or []
+    competition_id = payload.get("competition_id")
     if not ids:
-        return {"swimmers": relay_db.load_all(db_path)}
+        return {"swimmers": relay_db.load_all(db_path, competition_id=int(competition_id) if competition_id is not None else None)}
     relay_db.ensure_database(db_path)
     relay_db.delete_swimmers(db_path, [int(i) for i in ids])
-    return {"swimmers": relay_db.load_all(db_path)}
+    return {"swimmers": relay_db.load_all(db_path, competition_id=int(competition_id) if competition_id is not None else None)}
