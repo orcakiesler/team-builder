@@ -78,20 +78,55 @@
     refreshSwimmersBtn.addEventListener('click', () => api.loadSwimmers());
   }
 
+  const exportPdfBtn = document.getElementById('export-teams-pdf-btn');
+  if (exportPdfBtn) {
+    exportPdfBtn.addEventListener('click', async () => {
+      const result = state.lastTeamsResult;
+      if (!result || !result.teams || Object.keys(result.teams).length === 0) {
+        alert('Build teams first, then export to PDF.');
+        return;
+      }
+      const meet = state.currentCompetitions.find((c) => c.id === state.selectedMeetId);
+      const meetName = meet ? (meet.name || 'Relay Teams') : 'Relay Teams';
+      const meetDate = meet && (meet.start_date || meet.end_date)
+        ? [meet.start_date, meet.end_date].filter(Boolean).join(' – ')
+        : null;
+      const meetLocation = meet && meet.location ? meet.location : null;
+      try {
+        const out = await window.electronAPI.exportTeamsToPdf({
+          meetName,
+          meetDate,
+          meetLocation,
+          teams: result.teams,
+        });
+        if (out && out.canceled) return;
+        if (out && out.path) alert('PDF saved to:\n' + out.path);
+      } catch (err) {
+        alert('Export failed: ' + (err.message || String(err)));
+      }
+    });
+  }
+
   (async function init() {
+    api.setLoading('Loading…');
     const swimmersList = document.getElementById('swimmers-list');
     if (swimmersList) swimmersList.innerHTML = '<p class="text-muted">Loading swimmers…</p>';
-    await api.ensureDbPath();
     try {
-      const data = await window.electronAPI.requestInitialSwimmers();
-      state.currentSwimmers = data.swimmers || [];
-      if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
-        window.RelayApp.swimmers.renderSwimmers(state.currentSwimmers);
+      await api.ensureDbPath();
+      try {
+        const data = await window.electronAPI.requestInitialSwimmers();
+        state.currentSwimmers = data.swimmers || [];
+        if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
+          window.RelayApp.swimmers.renderSwimmers(state.currentSwimmers);
+        }
+        if (runHint) runHint.textContent = 'Select a meet and build teams, or update from the app';
+      } catch (_) {
+        await api.loadSwimmers();
       }
-      if (runHint) runHint.textContent = 'Import Excel files to add/update swimmers. Build teams uses the database.';
-    } catch (_) {
-      await api.loadSwimmers();
+      api.setLoading('Loading meets…');
+      await api.loadCompetitions();
+    } finally {
+      api.clearLoading();
     }
-    await api.loadCompetitions();
   })();
 })();

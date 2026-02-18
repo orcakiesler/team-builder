@@ -3,6 +3,7 @@
   const state = window.RelayApp.state;
   const api = window.RelayApp.api;
 
+  const importModal = document.getElementById('import-files-modal-overlay');
   const cardBestTimes = document.getElementById('card-best-times');
   const cardNamesRelays = document.getElementById('card-names-relays');
   const nameBestTimes = document.getElementById('name-best-times');
@@ -10,6 +11,15 @@
   const pathBestTimes = document.getElementById('path-best-times');
   const pathNamesRelays = document.getElementById('path-names-relays');
   const importBtn = document.getElementById('import-btn');
+
+  function openImportModal() {
+    if (importModal) importModal.classList.remove('hidden');
+    updateImportButton();
+  }
+
+  function closeImportModal() {
+    if (importModal) importModal.classList.add('hidden');
+  }
 
   function updateImportButton() {
     const { bestTimesPath, namesRelaysPath } = api.getPaths();
@@ -85,6 +95,7 @@
           msg += `\n\nNot in database (best-times only, not added):\n${data.skipped.join('\n')}`;
         }
         alert(msg);
+        closeImportModal();
       } catch (err) {
         alert('Error: ' + (err.message || String(err)));
       } finally {
@@ -94,7 +105,17 @@
     });
   }
 
+  const openImportBtn = document.getElementById('open-import-modal-btn');
+  const importModalClose = document.getElementById('import-files-modal-close');
+  if (openImportBtn) openImportBtn.addEventListener('click', openImportModal);
+  if (importModalClose) importModalClose.addEventListener('click', closeImportModal);
+  if (importModal) {
+    importModal.addEventListener('click', (e) => {
+      if (e.target === importModal) closeImportModal();
+    });
+  }
+
   updateImportButton();
 
-  window.RelayApp.import = { setFile, updateImportButton };
+  window.RelayApp.import = { setFile, updateImportButton, openImportModal, closeImportModal };
 })();

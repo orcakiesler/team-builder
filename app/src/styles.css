@@ -23,15 +23,30 @@ body {
   min-height: 100vh;
 }
 
-.competitions-box {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+.top-bar {
   padding: 0.75rem 2rem;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
 }
-.meet-selector { position: relative; flex: 0 1 auto; min-width: 0; max-width: 240px; }
+.top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+.top-bar-actions .run-btn {
+  min-width: 140px;
+}
+
+.meet-selector { position: relative; flex: 0 1 auto; min-width: 0; max-width: 260px; }
 .meet-selector-label {
   display: block;
   font-size: 0.75rem;
@@ -40,13 +55,13 @@ body {
 }
 .meet-dropdown-trigger {
   width: 100%;
-  padding: 0.4rem 0.6rem;
+  padding: 0.5rem 0.75rem;
   text-align: left;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -57,11 +72,12 @@ body {
   position: absolute;
   top: 100%;
   left: 0;
-  width: 280px;
+  width: 300px;
   margin-top: 0.25rem;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   max-height: 320px;
   overflow: hidden;
   display: flex;
@@ -90,7 +106,7 @@ body {
 .meet-dropdown-item .comp-dates { color: var(--text-muted); font-size: 0.8em; }
 .meet-dropdown-item .comp-location { color: var(--text-muted); font-size: 0.8em; }
 .meet-dropdown-actions { padding: 0.5rem 0.75rem; border-top: 1px solid var(--border); }
-.competitions-box .btn-add { flex-shrink: 0; }
+.btn-add { flex-shrink: 0; }
 
 .header {
   padding: 1.5rem 2rem;
@@ -107,18 +123,30 @@ body {
   font-size: 0.9rem;
 }
 
-.upload-section {
-  padding: 2rem;
-  max-width: 720px;
-  margin: 0 auto;
-}
-
 .file-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
+.file-cards-in-modal {
+  margin-top: 0.5rem;
+}
+.import-modal-hint {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+}
+.import-modal-actions {
+  margin-top: 1rem;
+}
+.modal-import {
+  max-width: 560px;
+}
+.modal-import .file-card {
+  padding: 1rem;
+}
+.modal-import .file-card h3 { font-size: 0.9rem; }
+.modal-import .file-name { font-size: 0.8rem; }
 
 .file-card {
   position: relative;
@@ -178,12 +206,6 @@ body {
   color: var(--text);
 }
 
-.action-row {
-  display: flex;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
-}
-.action-row .run-btn { flex: 1; }
 .btn {
   padding: 0.75rem 1.5rem;
   font-size: 1rem;
@@ -244,7 +266,6 @@ body {
   margin: 0.5rem 0 0 0;
   font-size: 0.8rem;
   color: var(--text-muted);
-  text-align: center;
 }
 
 .backend-hint {
@@ -284,10 +305,15 @@ body {
 }
 
 .results-section {
-  padding: 0 2rem 2rem;
+  padding: 1rem 2rem 2rem;
 }
 .results-section.hidden {
   display: none;
+}
+.results-section .run-hint {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .panels {
@@ -309,6 +335,19 @@ body {
   font-size: 1rem;
   font-weight: 600;
   border-bottom: 1px solid var(--border);
+}
+.teams-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.teams-panel-header h2 {
+  margin: 0;
+  padding: 0;
+  border-bottom: none;
 }
 
 .swimmers-toolbar {
@@ -600,18 +639,46 @@ body {
   font-size: 0.9rem;
 }
 
-.loading {
+.loading-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 20, 25, 0.9);
+  background: rgba(15, 20, 25, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
-  z-index: 50;
+  z-index: 200;
+  backdrop-filter: blur(2px);
 }
-.loading.hidden {
+.loading-overlay.hidden {
   display: none;
+}
+.loading-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  min-width: 200px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: loading-spin 0.8s linear infinite;
+}
+@keyframes loading-spin {
+  to { transform: rotate(360deg); }
+}
+.loading-message {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text);
 }
 
 .hidden {
