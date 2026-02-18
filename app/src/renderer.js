@@ -79,19 +79,25 @@
   }
 
   (async function init() {
+    api.setLoading('Loading…');
     const swimmersList = document.getElementById('swimmers-list');
     if (swimmersList) swimmersList.innerHTML = '<p class="text-muted">Loading swimmers…</p>';
-    await api.ensureDbPath();
     try {
-      const data = await window.electronAPI.requestInitialSwimmers();
-      state.currentSwimmers = data.swimmers || [];
-      if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
-        window.RelayApp.swimmers.renderSwimmers(state.currentSwimmers);
+      await api.ensureDbPath();
+      try {
+        const data = await window.electronAPI.requestInitialSwimmers();
+        state.currentSwimmers = data.swimmers || [];
+        if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
+          window.RelayApp.swimmers.renderSwimmers(state.currentSwimmers);
+        }
+        if (runHint) runHint.textContent = 'Select a meet and build teams, or update from the app';
+      } catch (_) {
+        await api.loadSwimmers();
       }
-      if (runHint) runHint.textContent = 'Select a meet and build teams, or update from the app';
-    } catch (_) {
-      await api.loadSwimmers();
+      api.setLoading('Loading meets…');
+      await api.loadCompetitions();
+    } finally {
+      api.clearLoading();
     }
-    await api.loadCompetitions();
   })();
 })();
