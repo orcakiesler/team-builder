@@ -13,7 +13,9 @@ const {
 } = require('./constants');
 
 let mainWindow;
-const backendDir = path.resolve(__dirname, '..', 'backend');
+const backendDir = app.isPackaged
+  ? path.join(process.resourcesPath, 'backend')
+  : path.resolve(__dirname, '..', 'backend');
 
 // Single persistent DB path - same path for dev and packaged so we never have two DBs.
 let resolvedDbPath = null;
@@ -88,13 +90,39 @@ ipcMain.handle('select-file', async (_, { which }) => {
   return result.filePaths[0];
 });
 
+/** When packaged, run `poetry install` in the bundled backend once so the venv has pandas etc. */
+let backendInstallPromise = null;
+function ensureBackendDeps() {
+  if (!app.isPackaged) return Promise.resolve();
+  if (backendInstallPromise) return backendInstallPromise;
+  const isWin = process.platform === 'win32';
+  backendInstallPromise = new Promise((resolve, reject) => {
+    const child = spawn('poetry', ['install', '--no-interaction', '--no-root'], {
+      cwd: backendDir,
+      env: process.env,
+      shell: isWin,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+    child.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `poetry install exited with code ${code}`));
+    });
+    child.on('error', (err) => reject(err));
+  });
+  return backendInstallPromise;
+}
+
 /** Run backend command; always uses main process DB path. */
-function runBackendCommand(options) {
+async function runBackendCommand(options) {
   const dbPath = getDbPath();
   const command = options.command;
   const isWin = process.platform === 'win32';
   const useStdin = STDIN_COMMANDS.includes(command) && options.payload != null;
   const dbPathForBackend = path.resolve(dbPath).replace(/\\/g, '/');
+
+  await ensureBackendDeps();
 
   const args = ['run', 'python', 'app_entry.py', '--db', dbPathForBackend, '--command', command];
   if (command === 'import-files') {

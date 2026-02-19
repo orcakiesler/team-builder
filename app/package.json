@@ -13,7 +13,8 @@
     "appId": "com.relayteambuilder.app",
     "productName": "Relay Team Builder",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "assets"
     },
     "files": [
       "main.js",
@@ -21,7 +22,23 @@
       "constants.js",
       "pdfExport.js",
       "src/**"
-    ]
+    ],
+    "extraResources": [
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": ["**/*", "!.venv/**", "!**/__pycache__/**", "!**/*.pyc"]
+      }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Relay Team Builder"
+    }
   },
   "devDependencies": {
     "electron": "^40.4.1",
