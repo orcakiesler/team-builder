@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from constants import AGE_GROUPS
+from constants import AGE_GROUPS, STROKE_LABELS
 from relay_builder import (
     filter_freestyle_women,
     filter_freestyle_men,
@@ -33,7 +33,6 @@ EVENT_CONFIGS = [
     ("Mixed 4x50 Freestyle", filter_mixed_freestyle, build_mixed_freestyle, False),
     ("Mixed 4x50 Medley", filter_mixed_medley, build_mixed_medley, True),
 ]
-STROKE_LABELS = ["Backstroke", "Breaststroke", "Butterfly", "Freestyle"]
 
 
 def _is_medical_valid(medical_date_str: str | None, meet_start_date_str: str | None) -> bool:
