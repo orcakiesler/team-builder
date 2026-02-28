@@ -42,6 +42,9 @@ AVAILABILITY_MEDLEY = "medley"
 AVAILABILITY_FREESTYLE_MIX = "freestyle_mix"
 AVAILABILITY_MEDLEY_MIX = "medley_mix"
 
+# Medley leg labels (order: back, breast, fly, free)
+STROKE_LABELS = ["Backstroke", "Breaststroke", "Butterfly", "Freestyle"]
+
 # Age groups for relay teams (sum of 4 swimmers' ages, inclusive)
 AGE_GROUPS = [
     (100, 119),  # group1

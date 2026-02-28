@@ -15,7 +15,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from constants import AGE_GROUPS
+from constants import AGE_GROUPS, STROKE_LABELS
 from relay_builder import (
     load_people,
     filter_freestyle_women,
@@ -66,7 +66,6 @@ EVENT_CONFIGS = [
     ("Mixed 4x50 Freestyle", filter_mixed_freestyle, build_mixed_freestyle, False),
     ("Mixed 4x50 Medley", filter_mixed_medley, build_mixed_medley, True),
 ]
-STROKE_LABELS = ["Backstroke", "Breaststroke", "Butterfly", "Freestyle"]
 
 
 @app.get("/health")
