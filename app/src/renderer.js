@@ -115,27 +115,22 @@
   (async function init() {
     api.setLoading('Loading…');
     const swimmersList = document.getElementById('swimmers-list');
-    if (swimmersList) swimmersList.innerHTML = '<p class="text-muted">Loading swimmers…</p>';
+    if (swimmersList) swimmersList.innerHTML = '<p class="text-muted">Loading…</p>';
     try {
       await api.ensureDbPath();
       try {
-        const teamsData = await window.electronAPI.runBackend({ command: 'list-teams' });
+        const teamsData = await window.electronAPI.runBackend({ command: 'list-teams', dbPath: state.dbPath });
         window.RelayApp.TEAMS = Array.isArray(teamsData.teams) ? teamsData.teams : ['Haifa - masters'];
       } catch (_) {
         window.RelayApp.TEAMS = ['Haifa - masters'];
       }
-      try {
-        const data = await window.electronAPI.requestInitialSwimmers();
-        state.currentSwimmers = data.swimmers || [];
-        if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
-          window.RelayApp.swimmers.renderSwimmers(state.currentSwimmers);
-        }
-        if (runHint) runHint.textContent = 'Select a meet and build teams, or update from the app';
-      } catch (_) {
-        await api.loadSwimmers();
-      }
+      // Load meets first so selectedMeetId is set (from last session); then load swimmers via backend so list is filtered by meet teams
       api.setLoading('Loading meets…');
       await api.loadCompetitions();
+      await api.loadSwimmers();
+      if (runHint) runHint.textContent = 'Select a meet and build teams, or update from the app';
+    } catch (err) {
+      if (runHint) runHint.textContent = (runHint.textContent ? runHint.textContent + ' ' : '') + (err.message || String(err));
     } finally {
       api.clearLoading();
     }

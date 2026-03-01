@@ -70,7 +70,15 @@ def people_from_db(db_path: Path, competition_id: int | None = None) -> list[Per
 
 def cmd_list_swimmers(db_path: Path, competition_id: int | None = None) -> dict:
     relay_db.ensure_database(db_path)
-    return {"swimmers": relay_db.load_all(db_path, competition_id=competition_id)}
+    swimmers = relay_db.load_all(db_path, competition_id=competition_id)
+    if competition_id is not None:
+        meet_teams = relay_db.load_competition_teams(db_path, competition_id)
+        if meet_teams:
+            def _norm(s: str) -> str:
+                return (s or "").strip().replace(" ", "").lower()
+            meet_teams_set = {_norm(t) for t in meet_teams if t}
+            swimmers = [s for s in swimmers if _norm((s.get("team") or "")) in meet_teams_set]
+    return {"swimmers": swimmers}
 
 
 def cmd_update_swimmer(db_path: Path, payload: dict) -> dict:

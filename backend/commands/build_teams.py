@@ -57,6 +57,13 @@ def cmd_build_teams(
     relay_db.ensure_database(db_path)
     reference_year = reference_year or date.today().year
     people = people_from_db(db_path, competition_id=competition_id)
+    if competition_id is not None:
+        meet_teams = relay_db.load_competition_teams(db_path, competition_id)
+        if meet_teams:
+            def _norm(s: str) -> str:
+                return (s or "").strip().replace(" ", "").lower()
+            meet_teams_set = {_norm(t) for t in meet_teams if t}
+            people = [p for p in people if _norm(getattr(p, "team", None) or "") in meet_teams_set]
     if meet_start_date:
         people = [
             p
@@ -64,6 +71,13 @@ def cmd_build_teams(
             if _is_medical_valid(getattr(p, "medical_date", None), meet_start_date)
         ]
     swimmers_with_id = relay_db.load_all(db_path, competition_id=competition_id)
+    if competition_id is not None:
+        meet_teams = relay_db.load_competition_teams(db_path, competition_id)
+        if meet_teams:
+            def _norm_swimmer(s: str) -> str:
+                return (s or "").strip().replace(" ", "").lower()
+            meet_teams_set = {_norm_swimmer(t) for t in meet_teams if t}
+            swimmers_with_id = [s for s in swimmers_with_id if _norm_swimmer(s.get("team") or "") in meet_teams_set]
     teams_by_event = {}
     for event_name, filter_func, build_func, is_medley in EVENT_CONFIGS:
         available = filter_func(people)

@@ -278,13 +278,21 @@
         alert('Please fill in name, start date, and end date.');
         return;
       }
+      const addCompTeamsEl = document.getElementById('add-comp-teams-checkboxes');
+      const teams = addCompTeamsEl
+        ? Array.from(addCompTeamsEl.querySelectorAll('input[type="checkbox"]:checked')).map((el) => el.value)
+        : [];
+      if (!teams.length) {
+        alert('Select at least one team for this meet.');
+        return;
+      }
       api.setLoading('Adding competition…');
       try {
         await api.ensureDbPath();
         const data = await window.electronAPI.runBackend({
           command: 'add-competition',
           dbPath: state.dbPath,
-          payload: { name, start_date: start, end_date: end, location },
+          payload: { name, start_date: start, end_date: end, location, teams },
           competitionId: state.selectedMeetId ?? undefined,
         });
         if (window.RelayApp.meetSelector && window.RelayApp.meetSelector.renderCompetitions) {
@@ -456,10 +464,29 @@
     });
   }
 
-  function openAddCompetitionModal() {
+  async function openAddCompetitionModal() {
     if (addCompetitionForm) addCompetitionForm.reset();
     const loc = document.getElementById('comp-location');
     if (loc) loc.value = '';
+    const addCompTeamsEl = document.getElementById('add-comp-teams-checkboxes');
+    try {
+      await api.ensureDbPath();
+      const data = await window.electronAPI.runBackend({ command: 'list-teams', dbPath: state.dbPath });
+      const teams = Array.isArray(data.teams) ? data.teams : [];
+      window.RelayApp.TEAMS = teams;
+      if (addCompTeamsEl && teams.length) {
+        addCompTeamsEl.innerHTML = teams
+          .map(
+            (teamName) =>
+              `<label class="checkbox-label meet-team-cb"><input type="checkbox" value="${utils.escapeHtml(teamName)}" checked /> ${utils.escapeHtml(teamName)}</label>`
+          )
+          .join('');
+      } else if (addCompTeamsEl) {
+        addCompTeamsEl.innerHTML = '<span class="text-muted">No teams yet. Add teams in Manage teams first, then create a meet.</span>';
+      }
+    } catch (_) {
+      if (addCompTeamsEl) addCompTeamsEl.innerHTML = '<span class="text-muted">Load a database first (or add teams in Manage teams).</span>';
+    }
     if (addCompetitionModal) addCompetitionModal.classList.remove('hidden');
   }
 

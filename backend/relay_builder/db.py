@@ -16,6 +16,8 @@ def ensure_database(db_path: str | Path) -> None:
     _migrate_swimmers_team(db_path)
     _migrate_swimmer_meet_availability(db_path)
     _migrate_teams_table(db_path)
+    _migrate_competition_teams(db_path)
+    _migrate_swimmers_team_masters_test(db_path)
 
 
 def _migrate_swimmers_medical(db_path: str | Path) -> None:
@@ -105,6 +107,63 @@ def _migrate_teams_table(db_path: str | Path) -> None:
         cur.execute("SELECT COUNT(*) FROM teams")
         if cur.fetchone()[0] == 0:
             cur.execute("INSERT INTO teams (name) VALUES (?)", ("Haifa - masters",))
+        conn.commit()
+
+
+def _migrate_competition_teams(db_path: str | Path) -> None:
+    """Create competition_teams table; backfill existing meets with all teams."""
+    path = Path(db_path)
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS competition_teams (
+                competition_id INTEGER NOT NULL,
+                team_name TEXT NOT NULL,
+                PRIMARY KEY (competition_id, team_name),
+                FOREIGN KEY (competition_id) REFERENCES competitions(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.commit()
+        cur.execute("SELECT COUNT(*) FROM competition_teams")
+        if cur.fetchone()[0] > 0:
+            return
+        cur.execute("SELECT id FROM competitions")
+        comp_ids = [row[0] for row in cur.fetchall()]
+        cur.execute("SELECT name FROM teams ORDER BY id")
+        all_teams = [row[0] for row in cur.fetchall()]
+        for comp_id in comp_ids:
+            for team_name in all_teams:
+                cur.execute(
+                    "INSERT OR IGNORE INTO competition_teams (competition_id, team_name) VALUES (?, ?)",
+                    (comp_id, team_name),
+                )
+        conn.commit()
+
+
+def _migrate_swimmers_team_masters_test(db_path: str | Path) -> None:
+    """One-time correction: ensure 'Masters - test' exists; set swimmers whose team is not in the teams list to it."""
+    path = Path(db_path)
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(swimmers)")
+        columns = [row[1] for row in cur.fetchall()]
+        if "team" not in columns:
+            conn.commit()
+            return
+        cur.execute("INSERT OR IGNORE INTO teams (name) VALUES (?)", ("Masters - test",))
+        cur.execute("SELECT name FROM teams")
+        valid_teams = {row[0] for row in cur.fetchall()}
+        cur.execute("SELECT id, team FROM swimmers")
+        for row in cur.fetchall():
+            swimmer_id, team = row[0], (row[1] or "").strip()
+            if team not in valid_teams:
+                cur.execute("UPDATE swimmers SET team = ? WHERE id = ?", ("Masters - test", swimmer_id))
         conn.commit()
 
 
@@ -446,6 +505,52 @@ def delete_team(db_path: str | Path, name: str) -> None:
         if cur.fetchone()[0] > 0:
             raise ValueError(f"Cannot delete team \"{name}\": some swimmers are still assigned to it. Reassign them first.")
         cur.execute("DELETE FROM teams WHERE name = ?", (name,))
+        conn.commit()
+
+
+def load_competition_teams(db_path: str | Path, competition_id: int) -> List[str]:
+    """Return team names for a competition, ordered by insertion."""
+    path = Path(db_path)
+    if not path.exists():
+        return []
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT team_name FROM competition_teams WHERE competition_id = ? ORDER BY team_name",
+            (competition_id,),
+        )
+        return [row[0] for row in cur.fetchall()]
+
+
+def load_competition_teams_map(db_path: str | Path) -> Dict[int, List[str]]:
+    """Return { competition_id: [team_names] } for all competitions."""
+    path = Path(db_path)
+    if not path.exists():
+        return {}
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT competition_id, team_name FROM competition_teams ORDER BY competition_id, team_name"
+        )
+        out = {}
+        for comp_id, team_name in cur.fetchall():
+            out.setdefault(comp_id, []).append(team_name)
+        return out
+
+
+def set_competition_teams(db_path: str | Path, competition_id: int, team_names: List[str]) -> None:
+    """Set the list of teams for a competition (replaces existing)."""
+    path = Path(db_path)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM competition_teams WHERE competition_id = ?", (competition_id,))
+        for name in team_names:
+            n = (name or "").strip()
+            if n:
+                cur.execute(
+                    "INSERT INTO competition_teams (competition_id, team_name) VALUES (?, ?)",
+                    (competition_id, n),
+                )
         conn.commit()
 
 

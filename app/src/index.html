@@ -32,6 +32,11 @@
     </div>
   </section>
 
+  <section class="meet-teams-bar hidden" id="meet-teams-section">
+    <span class="meet-teams-label">Teams in this meet</span>
+    <div class="meet-teams-checkboxes" id="meet-teams-checkboxes"></div>
+  </section>
+
   <section class="results-section" id="results-section">
     <p class="run-hint" id="run-hint">Select a meet and build teams, or update from the app</p>
     <div class="panels">
@@ -202,6 +207,11 @@
           <div class="form-group">
             <label for="comp-location">Location</label>
             <input type="text" id="comp-location" placeholder="e.g. City Pool" />
+          </div>
+          <div class="form-group">
+            <label>Teams in this meet <span class="required">*</span></label>
+            <p class="text-muted form-hint">Select at least one team. Only swimmers in these teams will appear for this meet.</p>
+            <div class="meet-teams-create-checkboxes" id="add-comp-teams-checkboxes"></div>
           </div>
         </form>
       </div>
