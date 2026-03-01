@@ -78,6 +78,11 @@
     refreshSwimmersBtn.addEventListener('click', () => api.loadSwimmers());
   }
 
+  const manageTeamsBtn = document.getElementById('manage-teams-btn');
+  if (manageTeamsBtn && modals && modals.openManageTeamsModal) {
+    manageTeamsBtn.addEventListener('click', () => modals.openManageTeamsModal());
+  }
+
   const exportPdfBtn = document.getElementById('export-teams-pdf-btn');
   if (exportPdfBtn) {
     exportPdfBtn.addEventListener('click', async () => {
@@ -113,6 +118,12 @@
     if (swimmersList) swimmersList.innerHTML = '<p class="text-muted">Loading swimmers…</p>';
     try {
       await api.ensureDbPath();
+      try {
+        const teamsData = await window.electronAPI.runBackend({ command: 'list-teams' });
+        window.RelayApp.TEAMS = Array.isArray(teamsData.teams) ? teamsData.teams : ['Haifa - masters'];
+      } catch (_) {
+        window.RelayApp.TEAMS = ['Haifa - masters'];
+      }
       try {
         const data = await window.electronAPI.requestInitialSwimmers();
         state.currentSwimmers = data.swimmers || [];

@@ -10,6 +10,8 @@ const STDIN_COMMANDS = [
   'add-competition',
   'delete-competitions',
   'add-swimmer',
+  'add-team',
+  'delete-team',
 ];
 
 /** Default window size */

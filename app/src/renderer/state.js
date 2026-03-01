@@ -40,6 +40,8 @@
   }
 
   window.RelayApp.state = state;
+  /** Teams list (loaded from backend; set by init in renderer.js) */
+  window.RelayApp.TEAMS = [];
   window.RelayApp.AVAILABILITY_KEYS = ['freestyle', 'medley', 'freestyle_mix', 'medley_mix'];
   window.RelayApp.getLastMeetId = getLastMeetId;
   window.RelayApp.setLastMeetId = setLastMeetId;

@@ -23,6 +23,8 @@ class Person:
     year_of_birth: Optional[int] = None
     age: Optional[int] = None  # derived: current year − year_of_birth
 
+    team: str = ""  # mandatory; must be one of TEAMS (stable, like name/medicals/birth year)
+
     freestyle_50: Optional[float] = None
     backstroke_50: Optional[float] = None
     breaststroke_50: Optional[float] = None

@@ -46,6 +46,7 @@
         <h2>Swimmers</h2>
         <div class="swimmers-toolbar">
           <button type="button" class="btn btn-primary btn-sm" id="add-swimmer-btn">Add swimmer</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="manage-teams-btn" title="Add or remove teams">Manage teams</button>
           <button type="button" class="btn btn-secondary btn-sm" id="refresh-swimmers-btn" title="Reload list from database">Refresh</button>
           <button type="button" class="btn btn-secondary btn-sm" id="select-mode-btn">Select</button>
           <button type="button" class="btn btn-secondary btn-sm hidden" id="select-all-swimmers-btn">Select all</button>
@@ -112,6 +113,12 @@
                 <option value="">Select…</option>
                 <option value="m">Male</option>
                 <option value="f">Female</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="new-team">Team <span class="required">*</span></label>
+              <select id="new-team" required>
+                <!-- options filled by JS from TEAMS -->
               </select>
             </div>
             <div class="form-group">
@@ -205,12 +212,24 @@
     </div>
   </div>
 
-  <div class="loading-overlay hidden" id="loading">
-    <div class="loading-card">
-      <div class="loading-spinner" aria-hidden="true"></div>
-      <p class="loading-message" id="loading-message">Loading…</p>
+  <div class="modal-overlay hidden" id="manage-teams-modal-overlay">
+    <div class="modal" id="manage-teams-modal">
+      <div class="modal-header">
+        <h3>Manage teams</h3>
+        <button type="button" class="modal-close" id="manage-teams-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted">Add team names that swimmers can be assigned to. You cannot remove a team that has swimmers assigned.</p>
+        <div class="form-group form-inline">
+          <input type="text" id="new-team-name" placeholder="New team name" />
+          <button type="button" class="btn btn-primary btn-sm" id="add-team-btn">Add team</button>
+        </div>
+        <ul class="teams-list" id="manage-teams-list"></ul>
+      </div>
     </div>
   </div>
+
+  <div class="loading-overlay hidden" id="loading">
 
   <script src="renderer/utils.js"></script>
   <script src="renderer/state.js"></script>

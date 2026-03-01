@@ -639,6 +639,32 @@ body {
   font-size: 0.9rem;
 }
 
+.form-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.form-inline input {
+  flex: 1;
+  min-width: 0;
+}
+.teams-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.team-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.team-list-item:last-child {
+  border-bottom: none;
+}
+
 .loading-overlay {
   position: fixed;
   inset: 0;
