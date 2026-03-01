@@ -28,6 +28,7 @@ from constants import (
 def load_people(
     best_times_path: str | Path,
     names_relays_path: str | Path,
+    default_team: str = "Haifa - masters",
 ) -> List[Person]:
     """
     Load swimmers from the two Excel files and return a list of Person objects.
@@ -213,6 +214,7 @@ def load_people(
                 gender=gender,
                 year_of_birth=yob,
                 age=age,
+                team=default_team,
                 freestyle_50=freestyle_50,
                 backstroke_50=backstroke_50,
                 breaststroke_50=breaststroke_50,
@@ -225,7 +227,7 @@ def load_people(
     return people
 
 
-def load_people_from_names_only(names_relays_path: str | Path) -> List[Person]:
+def load_people_from_names_only(names_relays_path: str | Path, default_team: str = "Haifa - masters") -> List[Person]:
     """
     Load swimmers from the names/relays Excel file only.
     Best times are left None. Use for "names only" import (add/update from names, times empty for new).
@@ -308,6 +310,7 @@ def load_people_from_names_only(names_relays_path: str | Path) -> List[Person]:
                 gender=gender,
                 year_of_birth=yob,
                 age=age,
+                team=default_team,
                 freestyle_50=None,
                 backstroke_50=None,
                 breaststroke_50=None,
@@ -319,7 +322,7 @@ def load_people_from_names_only(names_relays_path: str | Path) -> List[Person]:
     return people
 
 
-def load_people_from_best_times_only(best_times_path: str | Path) -> List[Person]:
+def load_people_from_best_times_only(best_times_path: str | Path, default_team: str = "Haifa - masters") -> List[Person]:
     """
     Load name + best times from the best-times Excel file only.
     Use for "best times only" import: match by name to DB and update times; skip if not in DB.
@@ -369,6 +372,7 @@ def load_people_from_best_times_only(best_times_path: str | Path) -> List[Person
                 gender=None,
                 year_of_birth=None,
                 age=None,
+                team=default_team,
                 freestyle_50=freestyle_50,
                 backstroke_50=backstroke_50,
                 breaststroke_50=breaststroke_50,

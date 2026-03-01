@@ -1,8 +1,9 @@
 """
 Entry point for the Electron app. Supports:
 - Legacy: --best-times, --names-relays → run from files, print JSON.
-- Commands (with --db): list-swimmers, build-teams, import-files, update-swimmer,
-  delete-swimmers, list-competitions, add-competition, delete-competitions, add-swimmer.
+- Commands (with --db): list-teams, list-swimmers, build-teams, import-files, update-swimmer,
+  delete-swimmers, list-competitions, add-competition, delete-competitions, add-swimmer,
+  add-team, delete-team.
 """
 
 from __future__ import annotations
@@ -16,11 +17,14 @@ from pathlib import Path
 from commands import (
     cmd_add_competition,
     cmd_add_swimmer,
+    cmd_add_team,
     cmd_build_teams,
     cmd_delete_competitions,
     cmd_delete_swimmers,
+    cmd_delete_team,
     cmd_import_files,
     cmd_list_competitions,
+    cmd_list_teams,
     cmd_list_swimmers,
     cmd_update_swimmer,
     run_legacy,
@@ -34,6 +38,7 @@ def main() -> None:
         "--command",
         default=None,
         choices=[
+            "list-teams",
             "list-swimmers",
             "build-teams",
             "import-files",
@@ -43,6 +48,8 @@ def main() -> None:
             "add-competition",
             "delete-competitions",
             "add-swimmer",
+            "add-team",
+            "delete-team",
         ],
     )
     parser.add_argument("--best-times", default=None)
@@ -63,10 +70,16 @@ def main() -> None:
 
     try:
         db_path_str = os.environ.get("RELAY_DB_PATH") or args.db
+        comp_id = args.competition_id
         if db_path_str and args.command:
             db_path = Path(db_path_str).resolve()
-            comp_id = args.competition_id
-            if args.command == "list-swimmers":
+            if args.command == "list-teams":
+                out = cmd_list_teams(db_path)
+            elif args.command == "add-team":
+                out = cmd_add_team(db_path, json.load(sys.stdin))
+            elif args.command == "delete-team":
+                out = cmd_delete_team(db_path, json.load(sys.stdin))
+            elif args.command == "list-swimmers":
                 out = cmd_list_swimmers(db_path, competition_id=comp_id)
             elif args.command == "build-teams":
                 out = cmd_build_teams(db_path, args.reference_year, args.meet_start_date, competition_id=comp_id)

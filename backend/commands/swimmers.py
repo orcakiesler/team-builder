@@ -9,6 +9,10 @@ from relay_builder.models import Person
 from relay_builder import db as relay_db
 
 
+def _get_teams(db_path: Path) -> list:
+    return relay_db.load_teams(db_path)
+
+
 def person_to_dict(p: Person, id_: int | None = None) -> dict:
     out = {
         "first_name": p.first_name,
@@ -17,6 +21,7 @@ def person_to_dict(p: Person, id_: int | None = None) -> dict:
         "gender": p.gender,
         "year_of_birth": p.year_of_birth,
         "age": p.age,
+        "team": getattr(p, "team", None) or "",
         "freestyle_50": p.freestyle_50,
         "backstroke_50": p.backstroke_50,
         "breaststroke_50": p.breaststroke_50,
@@ -29,13 +34,14 @@ def person_to_dict(p: Person, id_: int | None = None) -> dict:
     return out
 
 
-def swimmer_dict_to_person(d: dict) -> Person:
+def swimmer_dict_to_person(d: dict, default_team: str = "") -> Person:
     return Person(
         first_name=d.get("first_name") or "",
         last_name=d.get("last_name") or "",
         gender=d.get("gender"),
         year_of_birth=d.get("year_of_birth"),
         age=d.get("age"),
+        team=(d.get("team") or "").strip() or default_team,
         freestyle_50=d.get("freestyle_50"),
         backstroke_50=d.get("backstroke_50"),
         breaststroke_50=d.get("breaststroke_50"),
@@ -56,13 +62,23 @@ def optional_float(val):
 
 def people_from_db(db_path: Path, competition_id: int | None = None) -> list[Person]:
     """Load swimmers as Person list; if competition_id is set, availability is for that meet."""
+    teams = _get_teams(db_path)
+    default_team = teams[0] if teams else ""
     rows = relay_db.load_all(db_path, competition_id=competition_id)
-    return [swimmer_dict_to_person(r) for r in rows]
+    return [swimmer_dict_to_person(r, default_team) for r in rows]
 
 
 def cmd_list_swimmers(db_path: Path, competition_id: int | None = None) -> dict:
     relay_db.ensure_database(db_path)
-    return {"swimmers": relay_db.load_all(db_path, competition_id=competition_id)}
+    swimmers = relay_db.load_all(db_path, competition_id=competition_id)
+    if competition_id is not None:
+        meet_teams = relay_db.load_competition_teams(db_path, competition_id)
+        if meet_teams:
+            def _norm(s: str) -> str:
+                return (s or "").strip().replace(" ", "").lower()
+            meet_teams_set = {_norm(t) for t in meet_teams if t}
+            swimmers = [s for s in swimmers if _norm((s.get("team") or "")) in meet_teams_set]
+    return {"swimmers": swimmers}
 
 
 def cmd_update_swimmer(db_path: Path, payload: dict) -> dict:
@@ -95,6 +111,12 @@ def cmd_update_swimmer(db_path: Path, payload: dict) -> dict:
         kwargs["butterfly_50"] = payload["butterfly_50"]
     if "medical_date" in payload:
         kwargs["medical_date"] = payload["medical_date"] or None
+    if "team" in payload:
+        team_val = (payload.get("team") or "").strip()
+        teams = _get_teams(db_path)
+        if team_val not in teams:
+            raise ValueError(f"Team must be one of: {', '.join(teams)}")
+        kwargs["team"] = team_val
 
     relay_db.update_swimmer(db_path, int(swimmer_id), **kwargs)
     if competition_id is not None and availability is not None:
@@ -122,6 +144,10 @@ def cmd_add_swimmer(db_path: Path, payload: dict) -> dict:
         raise ValueError("First name is required")
     if not last_name:
         raise ValueError("Last name is required")
+    team_raw = (payload.get("team") or "").strip()
+    teams = _get_teams(db_path)
+    if not team_raw or team_raw not in teams:
+        raise ValueError(f"Team is required and must be one of: {', '.join(teams)}")
     if year_of_birth is None:
         raise ValueError("Birth year is required")
     if gender not in ("m", "f"):
@@ -145,6 +171,7 @@ def cmd_add_swimmer(db_path: Path, payload: dict) -> dict:
         gender=gender,
         year_of_birth=year_of_birth,
         age=(date.today().year - year_of_birth) if year_of_birth else None,
+        team=team_raw,
         freestyle_50=freestyle_50,
         backstroke_50=backstroke_50,
         breaststroke_50=breaststroke_50,

@@ -49,6 +49,7 @@
       ? `<dt>Availability</dt><dd><ul class="availability-list">${availList || '<li>–</li>'}</ul></dd>`
       : '<dt>Availability</dt><dd class="text-muted">Select a meet to see availability.</dd>';
     const medicalStr = s.medical_date && String(s.medical_date).trim() ? utils.escapeHtml(String(s.medical_date).slice(0, 10)) : '–';
+    const teamStr = s.team && String(s.team).trim() ? utils.escapeHtml(s.team) : '–';
     modalBody.innerHTML = `
       <dl>
         <dt>First name</dt><dd>${utils.escapeHtml(s.first_name)}</dd>
@@ -56,6 +57,7 @@
         <dt>Gender</dt><dd>${utils.escapeHtml(s.gender ?? '–')}</dd>
         <dt>Year of birth</dt><dd>${s.year_of_birth ?? '–'}</dd>
         <dt>Age</dt><dd>${s.age ?? '–'}</dd>
+        <dt>Team</dt><dd>${teamStr}</dd>
         <dt>Medical date</dt><dd>${medicalStr}</dd>
         <dt>50 Free</dt><dd>${utils.formatTime(s.freestyle_50)}</dd>
         <dt>50 Back</dt><dd>${utils.formatTime(s.backstroke_50)}</dd>
@@ -69,6 +71,8 @@
   }
 
   function buildEditFormHTML() {
+    const TEAMS = window.RelayApp.TEAMS || [];
+    const teamOptions = TEAMS.map((t) => `<option value="${utils.escapeHtml(t)}">${utils.escapeHtml(t)}</option>`).join('');
     const availCheckboxes = AVAILABILITY_KEYS.map(
       (k) =>
         `<label class="checkbox-label"><input type="checkbox" name="avail-${k}" data-key="${utils.escapeHtml(k)}" /> ${utils.escapeHtml(k.replace('_', ' '))}</label>`
@@ -92,6 +96,10 @@
       <div class="form-group">
         <label for="edit-year-of-birth">Birth year <span class="required">*</span></label>
         <input type="number" id="edit-year-of-birth" required min="1900" max="2030" />
+      </div>
+      <div class="form-group">
+        <label for="edit-team">Team <span class="required">*</span></label>
+        <select id="edit-team" required>${teamOptions}</select>
       </div>
       <div class="form-group">
         <label for="edit-medical-date">Medical date</label>
@@ -119,6 +127,11 @@
     document.getElementById('edit-last-name').value = swimmer.last_name || '';
     document.getElementById('edit-gender').value = swimmer.gender === 'f' ? 'f' : 'm';
     document.getElementById('edit-year-of-birth').value = swimmer.year_of_birth ?? '';
+    const editTeam = document.getElementById('edit-team');
+    if (editTeam) {
+      const teamVal = (swimmer.team || '').trim();
+      editTeam.value = teamVal && window.RelayApp.TEAMS && window.RelayApp.TEAMS.includes(teamVal) ? teamVal : (window.RelayApp.TEAMS && window.RelayApp.TEAMS[0]) || '';
+    }
     const medDate = swimmer.medical_date && String(swimmer.medical_date).trim() ? String(swimmer.medical_date).slice(0, 10) : '';
     document.getElementById('edit-medical-date').value = medDate;
     document.getElementById('edit-freestyle').value = swimmer.freestyle_50 != null ? swimmer.freestyle_50 : '';
@@ -154,6 +167,8 @@
     const last_name = document.getElementById('edit-last-name').value.trim();
     const gender = document.getElementById('edit-gender').value;
     const year_of_birth = document.getElementById('edit-year-of-birth').value.trim();
+    const teamEl = document.getElementById('edit-team');
+    const team = teamEl ? teamEl.value.trim() : '';
     const medical_date = document.getElementById('edit-medical-date').value.trim() || null;
     const freestyle_50 = document.getElementById('edit-freestyle').value.trim();
     const backstroke_50 = document.getElementById('edit-backstroke').value.trim();
@@ -165,6 +180,7 @@
       last_name,
       gender: gender || null,
       year_of_birth: year_of_birth === '' ? null : parseInt(year_of_birth, 10),
+      team: team || null,
       medical_date,
       freestyle_50: freestyle_50 === '' ? null : parseFloat(freestyle_50),
       backstroke_50: backstroke_50 === '' ? null : parseFloat(backstroke_50),
@@ -202,6 +218,12 @@
       const year_of_birth = document.getElementById('edit-year-of-birth').value.trim();
       if (!first_name || !last_name) {
         alert('First name and last name are required.');
+        return;
+      }
+      const teamEl = document.getElementById('edit-team');
+      const teamVal = teamEl ? teamEl.value.trim() : '';
+      if (!teamVal || !(window.RelayApp.TEAMS && window.RelayApp.TEAMS.includes(teamVal))) {
+        alert('Please select a team.');
         return;
       }
       const yob = year_of_birth === '' ? null : parseInt(year_of_birth, 10);
@@ -256,13 +278,21 @@
         alert('Please fill in name, start date, and end date.');
         return;
       }
+      const addCompTeamsEl = document.getElementById('add-comp-teams-checkboxes');
+      const teams = addCompTeamsEl
+        ? Array.from(addCompTeamsEl.querySelectorAll('input[type="checkbox"]:checked')).map((el) => el.value)
+        : [];
+      if (!teams.length) {
+        alert('Select at least one team for this meet.');
+        return;
+      }
       api.setLoading('Adding competition…');
       try {
         await api.ensureDbPath();
         const data = await window.electronAPI.runBackend({
           command: 'add-competition',
           dbPath: state.dbPath,
-          payload: { name, start_date: start, end_date: end, location },
+          payload: { name, start_date: start, end_date: end, location, teams },
           competitionId: state.selectedMeetId ?? undefined,
         });
         if (window.RelayApp.meetSelector && window.RelayApp.meetSelector.renderCompetitions) {
@@ -300,6 +330,11 @@
   }
   function resetAddSwimmerForm() {
     addSwimmerForm.reset();
+    const teamSelect = document.getElementById('new-team');
+    if (teamSelect && window.RelayApp.TEAMS && window.RelayApp.TEAMS.length) {
+      teamSelect.innerHTML = window.RelayApp.TEAMS.map((t) => `<option value="${t}">${t}</option>`).join('');
+      teamSelect.value = window.RelayApp.TEAMS[0];
+    }
     showAddSwimmerStep(1);
     ensureAddSwimmerAvailabilityCheckboxes();
     const ids = ['new-freestyle', 'new-backstroke', 'new-breaststroke', 'new-butterfly'];
@@ -348,11 +383,17 @@
           alert('Please enter a valid birth year (1900–2030).');
           return;
         }
-        if (gender !== 'm' && gender !== 'f') {
-          alert('Please select a gender.');
-          return;
-        }
-        showAddSwimmerStep(2);
+      if (gender !== 'm' && gender !== 'f') {
+        alert('Please select a gender.');
+        return;
+      }
+      const teamEl = document.getElementById('new-team');
+      const teamVal = teamEl ? teamEl.value.trim() : '';
+      if (!teamVal || !(window.RelayApp.TEAMS && window.RelayApp.TEAMS.includes(teamVal))) {
+        alert('Please select a team.');
+        return;
+      }
+      showAddSwimmerStep(2);
         return;
       }
 
@@ -369,6 +410,12 @@
         alert('Please select a gender.');
         return;
       }
+      const teamEl = document.getElementById('new-team');
+      const teamVal = teamEl ? teamEl.value.trim() : '';
+      if (!teamVal || !(window.RelayApp.TEAMS && window.RelayApp.TEAMS.includes(teamVal))) {
+        alert('Please select a team.');
+        return;
+      }
 
       const freestyle_50 = document.getElementById('new-freestyle') && document.getElementById('new-freestyle').value.trim();
       const backstroke_50 = document.getElementById('new-backstroke') && document.getElementById('new-backstroke').value.trim();
@@ -379,6 +426,7 @@
         last_name,
         year_of_birth,
         gender,
+        team: teamVal,
         medical_date: medical_date || undefined,
         freestyle_50: freestyle_50 === '' ? undefined : parseFloat(freestyle_50),
         backstroke_50: backstroke_50 === '' ? undefined : parseFloat(backstroke_50),
@@ -416,11 +464,121 @@
     });
   }
 
-  function openAddCompetitionModal() {
+  async function openAddCompetitionModal() {
     if (addCompetitionForm) addCompetitionForm.reset();
     const loc = document.getElementById('comp-location');
     if (loc) loc.value = '';
+    const addCompTeamsEl = document.getElementById('add-comp-teams-checkboxes');
+    try {
+      await api.ensureDbPath();
+      const data = await window.electronAPI.runBackend({ command: 'list-teams', dbPath: state.dbPath });
+      const teams = Array.isArray(data.teams) ? data.teams : [];
+      window.RelayApp.TEAMS = teams;
+      if (addCompTeamsEl && teams.length) {
+        addCompTeamsEl.innerHTML = teams
+          .map(
+            (teamName) =>
+              `<label class="checkbox-label meet-team-cb"><input type="checkbox" value="${utils.escapeHtml(teamName)}" checked /> ${utils.escapeHtml(teamName)}</label>`
+          )
+          .join('');
+      } else if (addCompTeamsEl) {
+        addCompTeamsEl.innerHTML = '<span class="text-muted">No teams yet. Add teams in Manage teams first, then create a meet.</span>';
+      }
+    } catch (_) {
+      if (addCompTeamsEl) addCompTeamsEl.innerHTML = '<span class="text-muted">Load a database first (or add teams in Manage teams).</span>';
+    }
     if (addCompetitionModal) addCompetitionModal.classList.remove('hidden');
+  }
+
+  const manageTeamsModal = document.getElementById('manage-teams-modal-overlay');
+  const manageTeamsClose = document.getElementById('manage-teams-close');
+  const manageTeamsList = document.getElementById('manage-teams-list');
+  const newTeamNameInput = document.getElementById('new-team-name');
+  const addTeamBtn = document.getElementById('add-team-btn');
+
+  async function refreshManageTeamsList() {
+    if (!manageTeamsList) return;
+    try {
+      await api.ensureDbPath();
+      const data = await window.electronAPI.runBackend({ command: 'list-teams', dbPath: state.dbPath });
+      const teams = Array.isArray(data.teams) ? data.teams : [];
+      window.RelayApp.TEAMS = teams;
+      manageTeamsList.innerHTML = teams
+        .map(
+          (name) =>
+            `<li class="team-list-item">
+              <span>${utils.escapeHtml(name)}</span>
+              <button type="button" class="btn btn-danger btn-sm btn-remove-team" data-team="${utils.escapeHtml(name)}">Remove</button>
+            </li>`
+        )
+        .join('');
+      manageTeamsList.querySelectorAll('.btn-remove-team').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const teamName = btn.getAttribute('data-team');
+          if (!teamName || !confirm(`Remove team "${teamName}"? This will fail if any swimmer is assigned to it.`)) return;
+          api.setLoading('Removing…');
+          try {
+            await api.ensureDbPath();
+            const out = await window.electronAPI.runBackend({
+              command: 'delete-team',
+              dbPath: state.dbPath,
+              payload: { name: teamName },
+            });
+            window.RelayApp.TEAMS = out.teams || [];
+            await refreshManageTeamsList();
+          } catch (err) {
+            alert('Error: ' + (err.message || String(err)));
+          } finally {
+            api.clearLoading();
+          }
+        });
+      });
+    } catch (err) {
+      manageTeamsList.innerHTML = '<li class="text-muted">Failed to load teams.</li>';
+    }
+  }
+
+  function closeManageTeamsModal() {
+    if (manageTeamsModal) manageTeamsModal.classList.add('hidden');
+    if (newTeamNameInput) newTeamNameInput.value = '';
+  }
+
+  async function openManageTeamsModal() {
+    if (manageTeamsModal) manageTeamsModal.classList.remove('hidden');
+    await refreshManageTeamsList();
+    if (newTeamNameInput) setTimeout(() => newTeamNameInput.focus(), 100);
+  }
+
+  if (manageTeamsClose) manageTeamsClose.addEventListener('click', closeManageTeamsModal);
+  if (manageTeamsModal) {
+    manageTeamsModal.addEventListener('click', (e) => {
+      if (e.target === manageTeamsModal) closeManageTeamsModal();
+    });
+  }
+  if (addTeamBtn && newTeamNameInput) {
+    addTeamBtn.addEventListener('click', async () => {
+      const name = newTeamNameInput.value.trim();
+      if (!name) {
+        alert('Enter a team name.');
+        return;
+      }
+      api.setLoading('Adding team…');
+      try {
+        await api.ensureDbPath();
+        const out = await window.electronAPI.runBackend({
+          command: 'add-team',
+          dbPath: state.dbPath,
+          payload: { name },
+        });
+        window.RelayApp.TEAMS = out.teams || [];
+        newTeamNameInput.value = '';
+        await refreshManageTeamsList();
+      } catch (err) {
+        alert('Error: ' + (err.message || String(err)));
+      } finally {
+        api.clearLoading();
+      }
+    });
   }
 
   window.RelayApp.modals = {
@@ -430,6 +588,8 @@
     closeAddCompetitionModal,
     closeAddSwimmerModal,
     openAddCompetitionModal,
+    openManageTeamsModal,
+    closeManageTeamsModal,
     resetAddSwimmerForm,
     showAddSwimmerStep,
     ensureAddSwimmerAvailabilityCheckboxes,

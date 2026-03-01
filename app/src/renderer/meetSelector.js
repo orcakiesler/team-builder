@@ -9,10 +9,27 @@
   const meetDropdownList = document.getElementById('meet-dropdown-list');
   const removeSelectedCompetitionsBtn = document.getElementById('remove-selected-competitions-btn');
   const resultsSection = document.getElementById('results-section');
+  const meetTeamsSection = document.getElementById('meet-teams-section');
+  const meetTeamsCheckboxes = document.getElementById('meet-teams-checkboxes');
 
   function updateMeetTriggerText() {
     const selected = state.currentCompetitions.find((c) => c.id === state.selectedMeetId);
     if (meetDropdownTrigger) meetDropdownTrigger.textContent = selected ? selected.name : 'Select a meet';
+    updateMeetTeamsSection();
+  }
+
+  function updateMeetTeamsSection() {
+    if (!meetTeamsSection || !meetTeamsCheckboxes) return;
+    if (state.selectedMeetId == null) {
+      meetTeamsSection.classList.add('hidden');
+      return;
+    }
+    const meet = state.currentCompetitions.find((c) => c.id === state.selectedMeetId);
+    const meetTeamNames = meet && Array.isArray(meet.teams) ? meet.teams : [];
+    meetTeamsSection.classList.remove('hidden');
+    meetTeamsCheckboxes.innerHTML = meetTeamNames.length
+      ? meetTeamNames.map((t) => `<span class="meet-team-tag">${utils.escapeHtml(t)}</span>`).join('')
+      : '<span class="text-muted">No teams in this meet</span>';
   }
 
   function closeMeetDropdown() {
@@ -88,6 +105,7 @@
       if (meetDropdownList) meetDropdownList.innerHTML = '';
       if (meetDropdownTrigger) meetDropdownTrigger.textContent = 'Select a meet';
       state.selectedMeetId = null;
+      if (meetTeamsSection) meetTeamsSection.classList.add('hidden');
       if (removeSelectedCompetitionsBtn) removeSelectedCompetitionsBtn.classList.add('hidden');
       return;
     }

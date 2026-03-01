@@ -26,6 +26,9 @@ YOB_CANDIDATES = ["year of birth", "yob", "birth year", "born", "birth_year"]
 GENDER_CANDIDATES = ["gender", "sex"]
 MEDICALS_CANDIDATES = ["medicals", "medical", "last medical", "medical date", "medical check"]
 
+# Teams (stable per-person; selection from this list only)
+TEAMS = ["Haifa - masters"]
+
 # Gender values
 GENDER_MEN = "m"
 GENDER_WOMEN = "f"

@@ -13,7 +13,11 @@ def ensure_database(db_path: str | Path) -> None:
     """Create the swimmers database if it does not exist and run migrations."""
     create_database(db_path)
     _migrate_swimmers_medical(db_path)
+    _migrate_swimmers_team(db_path)
     _migrate_swimmer_meet_availability(db_path)
+    _migrate_teams_table(db_path)
+    _migrate_competition_teams(db_path)
+    _migrate_swimmers_team_masters_test(db_path)
 
 
 def _migrate_swimmers_medical(db_path: str | Path) -> None:
@@ -27,6 +31,21 @@ def _migrate_swimmers_medical(db_path: str | Path) -> None:
         columns = [row[1] for row in cur.fetchall()]
         if "medical_date" not in columns:
             cur.execute("ALTER TABLE swimmers ADD COLUMN medical_date TEXT")
+        conn.commit()
+
+
+def _migrate_swimmers_team(db_path: str | Path) -> None:
+    """Add team column to swimmers if it does not exist; set existing rows to default 'Haifa - masters'."""
+    path = Path(db_path)
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(swimmers)")
+        columns = [row[1] for row in cur.fetchall()]
+        if "team" not in columns:
+            cur.execute("ALTER TABLE swimmers ADD COLUMN team TEXT")
+            cur.execute("UPDATE swimmers SET team = ? WHERE team IS NULL OR team = ''", ("Haifa - masters",))
         conn.commit()
 
 
@@ -70,6 +89,84 @@ def _migrate_swimmer_meet_availability(db_path: str | Path) -> None:
         conn.commit()
 
 
+def _migrate_teams_table(db_path: str | Path) -> None:
+    """Create teams table and seed with default if empty."""
+    path = Path(db_path)
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS teams (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE
+            )
+            """
+        )
+        cur.execute("SELECT COUNT(*) FROM teams")
+        if cur.fetchone()[0] == 0:
+            cur.execute("INSERT INTO teams (name) VALUES (?)", ("Haifa - masters",))
+        conn.commit()
+
+
+def _migrate_competition_teams(db_path: str | Path) -> None:
+    """Create competition_teams table; backfill existing meets with all teams."""
+    path = Path(db_path)
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS competition_teams (
+                competition_id INTEGER NOT NULL,
+                team_name TEXT NOT NULL,
+                PRIMARY KEY (competition_id, team_name),
+                FOREIGN KEY (competition_id) REFERENCES competitions(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.commit()
+        cur.execute("SELECT COUNT(*) FROM competition_teams")
+        if cur.fetchone()[0] > 0:
+            return
+        cur.execute("SELECT id FROM competitions")
+        comp_ids = [row[0] for row in cur.fetchall()]
+        cur.execute("SELECT name FROM teams ORDER BY id")
+        all_teams = [row[0] for row in cur.fetchall()]
+        for comp_id in comp_ids:
+            for team_name in all_teams:
+                cur.execute(
+                    "INSERT OR IGNORE INTO competition_teams (competition_id, team_name) VALUES (?, ?)",
+                    (comp_id, team_name),
+                )
+        conn.commit()
+
+
+def _migrate_swimmers_team_masters_test(db_path: str | Path) -> None:
+    """One-time correction: ensure 'Masters - test' exists; set swimmers whose team is not in the teams list to it."""
+    path = Path(db_path)
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(swimmers)")
+        columns = [row[1] for row in cur.fetchall()]
+        if "team" not in columns:
+            conn.commit()
+            return
+        cur.execute("INSERT OR IGNORE INTO teams (name) VALUES (?)", ("Masters - test",))
+        cur.execute("SELECT name FROM teams")
+        valid_teams = {row[0] for row in cur.fetchall()}
+        cur.execute("SELECT id, team FROM swimmers")
+        for row in cur.fetchall():
+            swimmer_id, team = row[0], (row[1] or "").strip()
+            if team not in valid_teams:
+                cur.execute("UPDATE swimmers SET team = ? WHERE id = ?", ("Masters - test", swimmer_id))
+        conn.commit()
+
+
 def create_database(db_path: str | Path) -> None:
     """
     Create (or recreate) a simple SQLite database for swimmers and competitions.
@@ -87,6 +184,7 @@ def create_database(db_path: str | Path) -> None:
                 last_name TEXT NOT NULL,
                 gender TEXT,
                 year_of_birth INTEGER,
+                team TEXT NOT NULL,
                 freestyle_50 REAL,
                 backstroke_50 REAL,
                 breaststroke_50 REAL,
@@ -107,6 +205,14 @@ def create_database(db_path: str | Path) -> None:
             )
             """
         )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS teams (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE
+            )
+            """
+        )
         conn.commit()
 
 
@@ -117,6 +223,7 @@ def _row_to_swimmer_dict(row: tuple) -> Dict[str, Any]:
         last_name,
         gender,
         year_of_birth,
+        team,
         freestyle_50,
         backstroke_50,
         breaststroke_50,
@@ -135,6 +242,7 @@ def _row_to_swimmer_dict(row: tuple) -> Dict[str, Any]:
         "gender": gender,
         "year_of_birth": year_of_birth,
         "age": age,
+        "team": team or "Haifa - masters",
         "freestyle_50": freestyle_50,
         "backstroke_50": backstroke_50,
         "breaststroke_50": breaststroke_50,
@@ -201,6 +309,7 @@ def load_all(
         cur.execute(
             """
             SELECT id, first_name, last_name, gender, year_of_birth,
+                   team,
                    freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
                    medical_date
             FROM swimmers
@@ -217,6 +326,7 @@ def load_all(
             last_name,
             gender,
             year_of_birth,
+            team,
             freestyle_50,
             backstroke_50,
             breaststroke_50,
@@ -233,6 +343,7 @@ def load_all(
             "gender": gender,
             "year_of_birth": year_of_birth,
             "age": age,
+            "team": team or "Haifa - masters",
             "freestyle_50": freestyle_50,
             "backstroke_50": backstroke_50,
             "breaststroke_50": breaststroke_50,
@@ -256,16 +367,18 @@ def insert_one(db_path: str | Path, person: Person) -> int:
             """
             INSERT INTO swimmers (
                 first_name, last_name, gender, year_of_birth,
+                team,
                 freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
                 availability_json, medical_date
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 person.first_name,
                 person.last_name,
                 person.gender,
                 person.year_of_birth,
+                person.team or "Haifa - masters",
                 person.freestyle_50,
                 person.backstroke_50,
                 person.breaststroke_50,
@@ -357,6 +470,90 @@ def delete_competitions(db_path: str | Path, ids: List[int]) -> None:
         conn.commit()
 
 
+def load_teams(db_path: str | Path) -> List[str]:
+    """Load team names from the teams table, ordered by id."""
+    path = Path(db_path)
+    if not path.exists():
+        return []
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM teams ORDER BY id")
+        return [row[0] for row in cur.fetchall()]
+
+
+def add_team(db_path: str | Path, name: str) -> None:
+    """Add a team name. Raises if duplicate."""
+    path = Path(db_path)
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("Team name is required")
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO teams (name) VALUES (?)", (name,))
+        conn.commit()
+
+
+def delete_team(db_path: str | Path, name: str) -> None:
+    """Remove a team. Raises if any swimmer is assigned to this team."""
+    path = Path(db_path)
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("Team name is required")
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM swimmers WHERE team = ?", (name,))
+        if cur.fetchone()[0] > 0:
+            raise ValueError(f"Cannot delete team \"{name}\": some swimmers are still assigned to it. Reassign them first.")
+        cur.execute("DELETE FROM teams WHERE name = ?", (name,))
+        conn.commit()
+
+
+def load_competition_teams(db_path: str | Path, competition_id: int) -> List[str]:
+    """Return team names for a competition, ordered by insertion."""
+    path = Path(db_path)
+    if not path.exists():
+        return []
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT team_name FROM competition_teams WHERE competition_id = ? ORDER BY team_name",
+            (competition_id,),
+        )
+        return [row[0] for row in cur.fetchall()]
+
+
+def load_competition_teams_map(db_path: str | Path) -> Dict[int, List[str]]:
+    """Return { competition_id: [team_names] } for all competitions."""
+    path = Path(db_path)
+    if not path.exists():
+        return {}
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT competition_id, team_name FROM competition_teams ORDER BY competition_id, team_name"
+        )
+        out = {}
+        for comp_id, team_name in cur.fetchall():
+            out.setdefault(comp_id, []).append(team_name)
+        return out
+
+
+def set_competition_teams(db_path: str | Path, competition_id: int, team_names: List[str]) -> None:
+    """Set the list of teams for a competition (replaces existing)."""
+    path = Path(db_path)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM competition_teams WHERE competition_id = ?", (competition_id,))
+        for name in team_names:
+            n = (name or "").strip()
+            if n:
+                cur.execute(
+                    "INSERT INTO competition_teams (competition_id, team_name) VALUES (?, ?)",
+                    (competition_id, n),
+                )
+        conn.commit()
+
+
 def insert_people(db_path: str | Path, people: Iterable[Person]) -> None:
     """Insert a collection of Person records into the SQLite database."""
     path = Path(db_path)
@@ -368,6 +565,7 @@ def insert_people(db_path: str | Path, people: Iterable[Person]) -> None:
                 p.last_name,
                 p.gender,
                 p.year_of_birth,
+                p.team or "Haifa - masters",
                 p.freestyle_50,
                 p.backstroke_50,
                 p.breaststroke_50,
@@ -384,6 +582,7 @@ def insert_people(db_path: str | Path, people: Iterable[Person]) -> None:
                 last_name,
                 gender,
                 year_of_birth,
+                team,
                 freestyle_50,
                 backstroke_50,
                 breaststroke_50,
@@ -391,7 +590,7 @@ def insert_people(db_path: str | Path, people: Iterable[Person]) -> None:
                 availability_json,
                 medical_date
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )
@@ -406,6 +605,7 @@ def update_swimmer(
     last_name: str | None = None,
     gender: str | None = None,
     year_of_birth: int | None = None,
+    team: str | None = None,
     freestyle_50: float | None = None,
     backstroke_50: float | None = None,
     breaststroke_50: float | None = None,
@@ -428,6 +628,9 @@ def update_swimmer(
     if year_of_birth is not None:
         updates.append("year_of_birth = ?")
         args.append(year_of_birth)
+    if team is not None:
+        updates.append("team = ?")
+        args.append(team)
     if freestyle_50 is not None:
         updates.append("freestyle_50 = ?")
         args.append(freestyle_50)

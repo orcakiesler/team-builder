@@ -32,6 +32,7 @@ def _person_equals_row_full(p: Person, row: dict) -> bool:
         and (p.last_name or "") == (row.get("last_name") or "")
         and _eq_val(p.gender, row.get("gender"))
         and _eq_val(p.year_of_birth, row.get("year_of_birth"))
+        and _eq_val(getattr(p, "team", None), row.get("team"))
         and _eq_val(p.freestyle_50, row.get("freestyle_50"))
         and _eq_val(p.backstroke_50, row.get("backstroke_50"))
         and _eq_val(p.breaststroke_50, row.get("breaststroke_50"))
@@ -48,6 +49,7 @@ def _person_equals_row_names_only(p: Person, row: dict) -> bool:
         and (p.last_name or "") == (row.get("last_name") or "")
         and _eq_val(p.gender, row.get("gender"))
         and _eq_val(p.year_of_birth, row.get("year_of_birth"))
+        and _eq_val(getattr(p, "team", None), row.get("team"))
         and _availability_eq(p.availability, row.get("availability"))
         and _eq_val(getattr(p, "medical_date", None), row.get("medical_date"))
     )
@@ -95,7 +97,9 @@ def cmd_import_files(
             raise FileNotFoundError(f"File not found: {best}")
         if not names.is_file():
             raise FileNotFoundError(f"File not found: {names}")
-        people_from_files = load_people(best, names)
+        teams = relay_db.load_teams(db_path)
+        default_team = teams[0] if teams else "Haifa - masters"
+        people_from_files = load_people(best, names, default_team=default_team)
         for p in people_from_files:
             key = (p.first_name.strip().lower(), p.last_name.strip().lower())
             if key in name_to_id:
@@ -109,6 +113,7 @@ def cmd_import_files(
                         last_name=p.last_name,
                         gender=p.gender,
                         year_of_birth=p.year_of_birth,
+                        team=getattr(p, "team", None),
                         freestyle_50=p.freestyle_50,
                         backstroke_50=p.backstroke_50,
                         breaststroke_50=p.breaststroke_50,
@@ -125,6 +130,7 @@ def cmd_import_files(
                     gender=p.gender,
                     year_of_birth=p.year_of_birth,
                     age=p.age,
+                    team=getattr(p, "team", "Haifa - masters"),
                     freestyle_50=p.freestyle_50,
                     backstroke_50=p.backstroke_50,
                     breaststroke_50=p.breaststroke_50,
@@ -142,7 +148,9 @@ def cmd_import_files(
         names = Path(names_relays_path)
         if not names.is_file():
             raise FileNotFoundError(f"File not found: {names}")
-        people_from_files = load_people_from_names_only(names)
+        teams = relay_db.load_teams(db_path)
+        default_team = teams[0] if teams else "Haifa - masters"
+        people_from_files = load_people_from_names_only(names, default_team=default_team)
         for p in people_from_files:
             key = (p.first_name.strip().lower(), p.last_name.strip().lower())
             if key in name_to_id:
@@ -156,6 +164,7 @@ def cmd_import_files(
                         last_name=p.last_name,
                         gender=p.gender,
                         year_of_birth=p.year_of_birth,
+                        team=getattr(p, "team", None),
                         medical_date=getattr(p, "medical_date", None),
                     )
                     updated += 1
@@ -168,6 +177,7 @@ def cmd_import_files(
                     gender=p.gender,
                     year_of_birth=p.year_of_birth,
                     age=p.age,
+                    team=getattr(p, "team", "Haifa - masters"),
                     freestyle_50=None,
                     backstroke_50=None,
                     breaststroke_50=None,
@@ -185,7 +195,9 @@ def cmd_import_files(
         best = Path(best_times_path)
         if not best.is_file():
             raise FileNotFoundError(f"File not found: {best}")
-        people_from_files = load_people_from_best_times_only(best)
+        teams = relay_db.load_teams(db_path)
+        default_team = teams[0] if teams else "Haifa - masters"
+        people_from_files = load_people_from_best_times_only(best, default_team=default_team)
         for p in people_from_files:
             key = (p.first_name.strip().lower(), p.last_name.strip().lower())
             if key in name_to_id:

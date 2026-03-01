@@ -188,8 +188,15 @@ async function loadSwimmersFromDb() {
   const fileBuffer = fs.readFileSync(dbPath);
   const db = new SQL.Database(fileBuffer);
   try {
+    // Ensure team column exists (migrate if old DB)
+    const pragma = db.exec('PRAGMA table_info(swimmers)');
+    const columns = pragma && pragma[0] && pragma[0].values ? pragma[0].values.map((r) => r[1]) : [];
+    if (!columns.includes('team')) {
+      db.run('ALTER TABLE swimmers ADD COLUMN team TEXT');
+      db.run("UPDATE swimmers SET team = 'Haifa - masters' WHERE team IS NULL OR team = ''");
+    }
     const result = db.exec(
-      'SELECT id, first_name, last_name, gender, year_of_birth, freestyle_50, backstroke_50, breaststroke_50, butterfly_50, availability_json, medical_date FROM swimmers ORDER BY first_name, last_name'
+      'SELECT id, first_name, last_name, gender, year_of_birth, COALESCE(team, \'Haifa - masters\') AS team, freestyle_50, backstroke_50, breaststroke_50, butterfly_50, availability_json, medical_date FROM swimmers ORDER BY first_name, last_name'
     );
     if (!result.length || !result[0].values.length) return [];
     const cols = result[0].columns;
@@ -211,6 +218,7 @@ async function loadSwimmersFromDb() {
         gender: o.gender || null,
         year_of_birth: o.year_of_birth,
         age: o.year_of_birth != null ? year - o.year_of_birth : null,
+        team: o.team || 'Haifa - masters',
         freestyle_50: o.freestyle_50,
         backstroke_50: o.backstroke_50,
         breaststroke_50: o.breaststroke_50,
