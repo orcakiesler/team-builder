@@ -4,6 +4,19 @@
  */
 (function () {
   const state = window.RelayApp.state;
+  const getAuthToken = window.RelayApp.getAuthToken;
+
+  // Simple guard: if not authenticated, send user back to login page.
+  try {
+    const token = getAuthToken && getAuthToken();
+    if (!token) {
+      window.location.href = 'login.html';
+      return;
+    }
+  } catch (_) {
+    window.location.href = 'login.html';
+    return;
+  }
   const api = window.RelayApp.api;
   const modals = window.RelayApp.modals;
   const runBtn = document.getElementById('run-btn');
@@ -12,6 +25,7 @@
   const openAdminBtn = document.getElementById('open-admin-btn');
   const addSwimmerBtn = document.getElementById('add-swimmer-btn');
   const refreshSwimmersBtn = document.getElementById('refresh-swimmers-btn');
+  const logoutBtn = document.getElementById('logout-btn');
 
   if (runBtn) {
     runBtn.addEventListener('click', async () => {
@@ -53,6 +67,15 @@
 
   if (openAdminBtn && window.RelayApp.admin && window.RelayApp.admin.openAdminPanel) {
     openAdminBtn.addEventListener('click', () => window.RelayApp.admin.openAdminPanel());
+  }
+
+  if (logoutBtn && window.RelayApp.clearAuthToken) {
+    logoutBtn.addEventListener('click', () => {
+      try {
+        window.RelayApp.clearAuthToken();
+      } catch (_) {}
+      window.location.href = 'login.html';
+    });
   }
 
   if (addSwimmerBtn) {

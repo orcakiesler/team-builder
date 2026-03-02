@@ -61,13 +61,9 @@ function createWindow() {
     },
   });
 
-  // `index.generated.html` is composed from partials at build/start time.
-  // Fallback to `index.html` so devs can still run Electron directly.
-  const generatedIndex = path.join(__dirname, 'src', 'index.generated.html');
-  const indexToLoad = fs.existsSync(generatedIndex)
-    ? generatedIndex
-    : path.join(__dirname, 'src', 'index.html');
-  mainWindow.loadFile(indexToLoad);
+  // Always start at login page; login redirects to main app after success.
+  const loginPath = path.join(__dirname, 'src', 'login.html');
+  mainWindow.loadFile(loginPath);
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 

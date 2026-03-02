@@ -271,8 +271,12 @@ body {
 .header {
   padding: 1.5rem 2rem;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
 }
-.header h1 {
+.header-main h1 {
   margin: 0 0 0.25rem 0;
   font-size: 1.5rem;
   font-weight: 600;
@@ -281,6 +285,10 @@ body {
   margin: 0;
   color: var(--text-muted);
   font-size: 0.9rem;
+}
+.header-actions .btn-sm {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
 }
 
 .file-cards {
