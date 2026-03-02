@@ -1,6 +1,6 @@
 /**
- * Entry: wires Run button, Add competition/swimmer, Refresh, and init.
- * Modules in renderer/ provide: utils, state, api, teams, modals, swimmers, import, meetSelector.
+ * Entry: wires Run button, Admin, Add swimmer, Refresh, and init.
+ * Modules in renderer/ provide: utils, state, api, teams, modals, admin, swimmers, import, meetSelector.
  */
 (function () {
   const state = window.RelayApp.state;
@@ -9,7 +9,7 @@
   const runBtn = document.getElementById('run-btn');
   const runHint = document.getElementById('run-hint');
   const resultsSection = document.getElementById('results-section');
-  const addCompetitionBtn = document.getElementById('add-competition-btn');
+  const openAdminBtn = document.getElementById('open-admin-btn');
   const addSwimmerBtn = document.getElementById('add-swimmer-btn');
   const refreshSwimmersBtn = document.getElementById('refresh-swimmers-btn');
 
@@ -51,8 +51,8 @@
     });
   }
 
-  if (addCompetitionBtn && modals && modals.openAddCompetitionModal) {
-    addCompetitionBtn.addEventListener('click', () => modals.openAddCompetitionModal());
+  if (openAdminBtn && window.RelayApp.admin && window.RelayApp.admin.openAdminPanel) {
+    openAdminBtn.addEventListener('click', () => window.RelayApp.admin.openAdminPanel());
   }
 
   if (addSwimmerBtn) {
@@ -76,11 +76,6 @@
 
   if (refreshSwimmersBtn) {
     refreshSwimmersBtn.addEventListener('click', () => api.loadSwimmers());
-  }
-
-  const manageTeamsBtn = document.getElementById('manage-teams-btn');
-  if (manageTeamsBtn && modals && modals.openManageTeamsModal) {
-    manageTeamsBtn.addEventListener('click', () => modals.openManageTeamsModal());
   }
 
   const exportPdfBtn = document.getElementById('export-teams-pdf-btn');

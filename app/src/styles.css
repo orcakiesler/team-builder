@@ -152,6 +152,61 @@ body {
 .meet-dropdown-actions { padding: 0.5rem 0.75rem; border-top: 1px solid var(--border); }
 .btn-add { flex-shrink: 0; }
 
+/* Admin panel popup */
+.modal-overlay-admin .modal-admin {
+  max-width: 520px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.admin-panel-body {
+  overflow-y: auto;
+}
+.admin-section {
+  margin-bottom: 1.5rem;
+}
+.admin-section:last-child {
+  margin-bottom: 0;
+}
+.admin-section h4 {
+  margin: 0 0 0.35rem 0;
+  font-size: 1rem;
+}
+.admin-hint {
+  font-size: 0.85rem;
+  margin: 0 0 0.75rem 0;
+}
+.admin-meets-list {
+  margin-bottom: 0.75rem;
+}
+.admin-meet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+}
+.admin-meet-row-info {
+  flex: 1;
+  min-width: 0;
+}
+.admin-meet-row-info .comp-name { font-weight: 600; display: block; }
+.admin-meet-row-info .comp-dates,
+.admin-meet-row-info .comp-location { color: var(--text-muted); font-size: 0.8em; }
+.admin-meet-row-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.admin-teams-list {
+  margin-top: 0.5rem;
+}
+
 .header {
   padding: 1.5rem 2rem;
   border-bottom: 1px solid var(--border);

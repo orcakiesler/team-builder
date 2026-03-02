@@ -12,6 +12,7 @@ from .competitions import (
     cmd_add_competition,
     cmd_delete_competitions,
     cmd_list_competitions,
+    cmd_update_competition,
 )
 from .build_teams import cmd_build_teams, run_legacy
 from .import_files import cmd_import_files
@@ -29,6 +30,7 @@ __all__ = [
     "cmd_list_competitions",
     "cmd_list_teams",
     "cmd_list_swimmers",
+    "cmd_update_competition",
     "cmd_update_swimmer",
     "people_from_db",
     "person_to_dict",

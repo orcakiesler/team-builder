@@ -458,6 +458,38 @@ def add_competition(
     }
 
 
+def update_competition(
+    db_path: str | Path,
+    competition_id: int,
+    name: str,
+    start_date: str,
+    end_date: str,
+    location: str,
+) -> Dict[str, Any]:
+    """Update a competition by id. Returns the updated row as dict."""
+    path = Path(db_path)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE competitions
+            SET name = ?, start_date = ?, end_date = ?, location = ?
+            WHERE id = ?
+            """,
+            (name, start_date, end_date, location, competition_id),
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            raise ValueError(f"Competition id {competition_id} not found")
+    return {
+        "id": competition_id,
+        "name": name,
+        "start_date": start_date,
+        "end_date": end_date,
+        "location": location,
+    }
+
+
 def delete_competitions(db_path: str | Path, ids: List[int]) -> None:
     """Delete competitions by id list."""
     if not ids:

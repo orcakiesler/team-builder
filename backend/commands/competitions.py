@@ -54,3 +54,25 @@ def cmd_delete_competitions(db_path: Path, payload: dict) -> dict:
     for c in competitions:
         c["teams"] = teams_map.get(c["id"], [])
     return {"competitions": competitions}
+
+
+def cmd_update_competition(db_path: Path, payload: dict) -> dict:
+    cid = payload.get("id")
+    if cid is None:
+        raise ValueError("Competition id is required for update")
+    cid = int(cid)
+    name = payload.get("name") or ""
+    start_date = payload.get("start_date") or ""
+    end_date = payload.get("end_date") or ""
+    location = payload.get("location") or ""
+    relay_db.ensure_database(db_path)
+    relay_db.update_competition(db_path, cid, name, start_date, end_date, location)
+    teams = payload.get("teams")
+    if isinstance(teams, list):
+        team_names = [str(t).strip() for t in teams if str(t).strip()]
+        relay_db.set_competition_teams(db_path, cid, team_names)
+    competitions = relay_db.load_competitions(db_path)
+    teams_map = relay_db.load_competition_teams_map(db_path)
+    for c in competitions:
+        c["teams"] = teams_map.get(c["id"], [])
+    return {"competitions": competitions}

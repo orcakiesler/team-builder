@@ -8,6 +8,7 @@ const STDIN_COMMANDS = [
   'update-swimmer',
   'delete-swimmers',
   'add-competition',
+  'update-competition',
   'delete-competitions',
   'add-swimmer',
   'add-team',

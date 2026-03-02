@@ -2,7 +2,7 @@
 Entry point for the Electron app. Supports:
 - Legacy: --best-times, --names-relays → run from files, print JSON.
 - Commands (with --db): list-teams, list-swimmers, build-teams, import-files, update-swimmer,
-  delete-swimmers, list-competitions, add-competition, delete-competitions, add-swimmer,
+  delete-swimmers, list-competitions, add-competition, update-competition, delete-competitions, add-swimmer,
   add-team, delete-team.
 """
 
@@ -26,6 +26,7 @@ from commands import (
     cmd_list_competitions,
     cmd_list_teams,
     cmd_list_swimmers,
+    cmd_update_competition,
     cmd_update_swimmer,
     run_legacy,
 )
@@ -46,6 +47,7 @@ def main() -> None:
             "delete-swimmers",
             "list-competitions",
             "add-competition",
+            "update-competition",
             "delete-competitions",
             "add-swimmer",
             "add-team",
@@ -103,6 +105,8 @@ def main() -> None:
                 out = cmd_list_competitions(db_path)
             elif args.command == "add-competition":
                 out = cmd_add_competition(db_path, json.load(sys.stdin))
+            elif args.command == "update-competition":
+                out = cmd_update_competition(db_path, json.load(sys.stdin))
             elif args.command == "add-swimmer":
                 payload = json.load(sys.stdin)
                 if comp_id is not None:

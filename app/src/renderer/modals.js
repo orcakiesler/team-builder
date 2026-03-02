@@ -22,6 +22,11 @@
   const addCompetitionForm = document.getElementById('add-competition-form');
   const addCompetitionCancel = document.getElementById('add-competition-cancel');
   const addCompetitionSave = document.getElementById('add-competition-save');
+  const editCompetitionModal = document.getElementById('edit-competition-modal-overlay');
+  const editCompetitionClose = document.getElementById('edit-competition-close');
+  const editCompetitionCancel = document.getElementById('edit-competition-cancel');
+  const editCompetitionSave = document.getElementById('edit-competition-save');
+  const editCompetitionForm = document.getElementById('edit-competition-form');
   const addSwimmerModal = document.getElementById('add-swimmer-modal-overlay');
   const addSwimmerClose = document.getElementById('add-swimmer-close');
   const addSwimmerForm = document.getElementById('add-swimmer-form');
@@ -299,6 +304,98 @@
           window.RelayApp.meetSelector.renderCompetitions(data.competitions);
         }
         closeAddCompetitionModal();
+        if (window.RelayApp.admin && window.RelayApp.admin.refreshMeetsList) {
+          window.RelayApp.admin.refreshMeetsList();
+        }
+      } catch (err) {
+        alert('Error: ' + (err.message || String(err)));
+      } finally {
+        api.clearLoading();
+      }
+    });
+  }
+
+  function closeEditCompetitionModal() {
+    if (editCompetitionModal) editCompetitionModal.classList.add('hidden');
+  }
+
+  async function openEditCompetitionModal(meet) {
+    if (!meet || !editCompetitionForm) return;
+    document.getElementById('edit-comp-id').value = meet.id;
+    document.getElementById('edit-comp-name').value = meet.name || '';
+    document.getElementById('edit-comp-start').value = meet.start_date || '';
+    document.getElementById('edit-comp-end').value = meet.end_date || '';
+    document.getElementById('edit-comp-location').value = meet.location || '';
+    const editCompTeamsEl = document.getElementById('edit-comp-teams-checkboxes');
+    try {
+      await api.ensureDbPath();
+      const data = await window.electronAPI.runBackend({ command: 'list-teams', dbPath: state.dbPath });
+      const allTeams = Array.isArray(data.teams) ? data.teams : [];
+      window.RelayApp.TEAMS = allTeams;
+      const meetTeams = Array.isArray(meet.teams) ? meet.teams : [];
+      if (editCompTeamsEl && allTeams.length) {
+        editCompTeamsEl.innerHTML = allTeams
+          .map(
+            (teamName) =>
+              `<label class="checkbox-label meet-team-cb"><input type="checkbox" value="${utils.escapeHtml(teamName)}" ${meetTeams.includes(teamName) ? 'checked' : ''} /> ${utils.escapeHtml(teamName)}</label>`
+          )
+          .join('');
+      } else if (editCompTeamsEl) {
+        editCompTeamsEl.innerHTML = '<span class="text-muted">No teams. Add teams in Admin first.</span>';
+      }
+    } catch (_) {
+      if (editCompTeamsEl) editCompTeamsEl.innerHTML = '<span class="text-muted">Failed to load teams.</span>';
+    }
+    if (addCompetitionModal) addCompetitionModal.classList.add('hidden');
+    if (editCompetitionModal) editCompetitionModal.classList.remove('hidden');
+  }
+
+  if (editCompetitionClose) editCompetitionClose.addEventListener('click', closeEditCompetitionModal);
+  if (editCompetitionCancel) editCompetitionCancel.addEventListener('click', closeEditCompetitionModal);
+  if (editCompetitionModal) {
+    editCompetitionModal.addEventListener('click', (e) => {
+      if (e.target === editCompetitionModal) closeEditCompetitionModal();
+    });
+  }
+  if (editCompetitionSave) {
+    editCompetitionSave.addEventListener('click', async () => {
+      const idEl = document.getElementById('edit-comp-id');
+      const id = idEl ? parseInt(idEl.value, 10) : NaN;
+      if (!id || isNaN(id)) return;
+      const name = document.getElementById('edit-comp-name').value.trim();
+      const start = document.getElementById('edit-comp-start').value;
+      const end = document.getElementById('edit-comp-end').value;
+      const location = document.getElementById('edit-comp-location').value.trim() || '';
+      if (!name || !start || !end) {
+        alert('Please fill in name, start date, and end date.');
+        return;
+      }
+      const editCompTeamsEl = document.getElementById('edit-comp-teams-checkboxes');
+      const teams = editCompTeamsEl
+        ? Array.from(editCompTeamsEl.querySelectorAll('input[type="checkbox"]:checked')).map((el) => el.value)
+        : [];
+      if (!teams.length) {
+        alert('Select at least one team for this meet.');
+        return;
+      }
+      api.setLoading('Saving…');
+      try {
+        await api.ensureDbPath();
+        const data = await window.electronAPI.runBackend({
+          command: 'update-competition',
+          dbPath: state.dbPath,
+          payload: { id, name, start_date: start, end_date: end, location, teams },
+        });
+        if (window.RelayApp.meetSelector && window.RelayApp.meetSelector.renderCompetitions) {
+          window.RelayApp.meetSelector.renderCompetitions(data.competitions || []);
+        }
+        if (window.RelayApp.meetSelector && window.RelayApp.meetSelector.updateMeetTriggerText) {
+          window.RelayApp.meetSelector.updateMeetTriggerText();
+        }
+        closeEditCompetitionModal();
+        if (window.RelayApp.admin && window.RelayApp.admin.refreshMeetsList) {
+          window.RelayApp.admin.refreshMeetsList();
+        }
       } catch (err) {
         alert('Error: ' + (err.message || String(err)));
       } finally {
@@ -586,8 +683,10 @@
     openEditModal,
     closeEditModal,
     closeAddCompetitionModal,
+    closeEditCompetitionModal,
     closeAddSwimmerModal,
     openAddCompetitionModal,
+    openEditCompetitionModal,
     openManageTeamsModal,
     closeManageTeamsModal,
     resetAddSwimmerForm,
