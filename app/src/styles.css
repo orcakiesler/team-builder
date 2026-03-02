@@ -206,6 +206,67 @@ body {
 .admin-teams-list {
   margin-top: 0.5rem;
 }
+.admin-db-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.admin-team-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.admin-team-name {
+  flex: 1;
+  min-width: 0;
+}
+.admin-team-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.admin-relay-types-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+.admin-relay-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.4rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 0.2rem;
+  font-size: 1.1em;
+  line-height: 1;
+}
+.btn-link:hover {
+  color: var(--text);
+}
+.admin-danger-zone {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: rgba(248, 81, 73, 0.06);
+}
+.admin-danger-zone h4 {
+  color: var(--danger, #f85149);
+}
+.admin-danger-zone .checkbox-label {
+  display: block;
+  margin-bottom: 0.5rem;
+}
 
 .header {
   padding: 1.5rem 2rem;

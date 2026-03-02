@@ -119,6 +119,12 @@
       } catch (_) {
         window.RelayApp.TEAMS = ['Haifa - masters'];
       }
+      try {
+        const relayData = await window.electronAPI.runBackend({ command: 'list-relay-types', dbPath: state.dbPath });
+        window.RelayApp.AVAILABILITY_KEYS = Array.isArray(relayData.relay_types) ? relayData.relay_types : ['freestyle', 'medley', 'freestyle_mix', 'medley_mix'];
+      } catch (_) {
+        window.RelayApp.AVAILABILITY_KEYS = ['freestyle', 'medley', 'freestyle_mix', 'medley_mix'];
+      }
       // Load meets first so selectedMeetId is set (from last session); then load swimmers via backend so list is filtered by meet teams
       api.setLoading('Loading meets…');
       await api.loadCompetitions();

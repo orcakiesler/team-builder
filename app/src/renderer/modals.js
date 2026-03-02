@@ -27,6 +27,14 @@
   const editCompetitionCancel = document.getElementById('edit-competition-cancel');
   const editCompetitionSave = document.getElementById('edit-competition-save');
   const editCompetitionForm = document.getElementById('edit-competition-form');
+  const duplicateMeetModal = document.getElementById('duplicate-meet-modal-overlay');
+  const duplicateMeetClose = document.getElementById('duplicate-meet-close');
+  const duplicateMeetCancel = document.getElementById('duplicate-meet-cancel');
+  const duplicateMeetSave = document.getElementById('duplicate-meet-save');
+  const bulkReassignModal = document.getElementById('bulk-reassign-modal-overlay');
+  const bulkReassignClose = document.getElementById('bulk-reassign-close');
+  const bulkReassignCancel = document.getElementById('bulk-reassign-cancel');
+  const bulkReassignSave = document.getElementById('bulk-reassign-save');
   const addSwimmerModal = document.getElementById('add-swimmer-modal-overlay');
   const addSwimmerClose = document.getElementById('add-swimmer-close');
   const addSwimmerForm = document.getElementById('add-swimmer-form');
@@ -45,10 +53,16 @@
     modalName.textContent = s.full_name;
     const hasMeet = state.selectedMeetId != null;
     const avail = s.availability || {};
+    const availKeys = window.RelayApp.AVAILABILITY_KEYS || Object.keys(avail) || [];
     const availList = hasMeet
-      ? Object.entries(avail)
-          .map(([k, v]) => `<li><span>${utils.escapeHtml(k)}</span><span>${v ? 'Yes' : 'No'}</span></li>`)
-          .join('')
+      ? (availKeys.length
+          ? availKeys
+              .map((k) => {
+                const v = !!avail[k];
+                return `<li><span>${utils.escapeHtml(k)}</span><span>${v ? 'Yes' : 'No'}</span></li>`;
+              })
+              .join('')
+          : '')
       : '';
     const availabilityHtml = hasMeet
       ? `<dt>Availability</dt><dd><ul class="availability-list">${availList || '<li>–</li>'}</ul></dd>`
@@ -78,7 +92,8 @@
   function buildEditFormHTML() {
     const TEAMS = window.RelayApp.TEAMS || [];
     const teamOptions = TEAMS.map((t) => `<option value="${utils.escapeHtml(t)}">${utils.escapeHtml(t)}</option>`).join('');
-    const availCheckboxes = AVAILABILITY_KEYS.map(
+    const availKeys = window.RelayApp.AVAILABILITY_KEYS || AVAILABILITY_KEYS || [];
+    const availCheckboxes = availKeys.map(
       (k) =>
         `<label class="checkbox-label"><input type="checkbox" name="avail-${k}" data-key="${utils.escapeHtml(k)}" /> ${utils.escapeHtml(k.replace('_', ' '))}</label>`
     ).join('');
@@ -149,7 +164,7 @@
       if (availSection) availSection.classList.remove('hidden');
       if (hintSpan) hintSpan.textContent = '(for current meet only)';
       const avail = swimmer.availability || {};
-      AVAILABILITY_KEYS.forEach((k) => {
+      (window.RelayApp.AVAILABILITY_KEYS || AVAILABILITY_KEYS || []).forEach((k) => {
         const cb = editSwimmerForm.querySelector(`input[name="avail-${k}"]`);
         if (cb) { cb.checked = !!avail[k]; cb.disabled = false; }
       });
@@ -194,7 +209,7 @@
     };
     if (state.selectedMeetId != null) {
       const availability = {};
-      AVAILABILITY_KEYS.forEach((k) => {
+      (window.RelayApp.AVAILABILITY_KEYS || AVAILABILITY_KEYS || []).forEach((k) => {
         const cb = editSwimmerForm.querySelector(`input[name="avail-${k}"]`);
         availability[k] = cb ? cb.checked : false;
       });
@@ -404,6 +419,126 @@
     });
   }
 
+  function closeDuplicateMeetModal() {
+    if (duplicateMeetModal) duplicateMeetModal.classList.add('hidden');
+  }
+  function openDuplicateMeetModal(meet) {
+    if (!meet) return;
+    document.getElementById('duplicate-meet-source-id').value = meet.id;
+    const info = document.getElementById('duplicate-meet-source-info');
+    if (info) info.textContent = `Duplicate "${meet.name}" (${meet.start_date} – ${meet.end_date}) with new dates.`;
+    document.getElementById('duplicate-meet-start').value = meet.start_date || '';
+    document.getElementById('duplicate-meet-end').value = meet.end_date || '';
+    if (duplicateMeetModal) duplicateMeetModal.classList.remove('hidden');
+  }
+  if (duplicateMeetClose) duplicateMeetClose.addEventListener('click', closeDuplicateMeetModal);
+  if (duplicateMeetCancel) duplicateMeetCancel.addEventListener('click', closeDuplicateMeetModal);
+  if (duplicateMeetModal) {
+    duplicateMeetModal.addEventListener('click', (e) => { if (e.target === duplicateMeetModal) closeDuplicateMeetModal(); });
+  }
+  if (duplicateMeetSave) {
+    duplicateMeetSave.addEventListener('click', async () => {
+      const sourceId = parseInt(document.getElementById('duplicate-meet-source-id').value, 10);
+      const newStart = document.getElementById('duplicate-meet-start').value;
+      const newEnd = document.getElementById('duplicate-meet-end').value;
+      if (!sourceId || !newStart || !newEnd) {
+        alert('Please enter new start and end dates.');
+        return;
+      }
+      api.setLoading('Duplicating…');
+      try {
+        await api.ensureDbPath();
+        const data = await window.electronAPI.runBackend({
+          command: 'duplicate-competition',
+          dbPath: state.dbPath,
+          payload: { source_id: sourceId, new_start_date: newStart, new_end_date: newEnd },
+        });
+        if (window.RelayApp.meetSelector && window.RelayApp.meetSelector.renderCompetitions) {
+          window.RelayApp.meetSelector.renderCompetitions(data.competitions || []);
+        }
+        closeDuplicateMeetModal();
+        if (window.RelayApp.admin && window.RelayApp.admin.refreshMeetsList) {
+          window.RelayApp.admin.refreshMeetsList();
+        }
+      } catch (err) {
+        alert('Error: ' + (err.message || String(err)));
+      } finally {
+        api.clearLoading();
+      }
+    });
+  }
+
+  let bulkReassignSourceTeam = null;
+  let bulkReassignSwimmerIds = [];
+  function closeBulkReassignModal() {
+    bulkReassignSourceTeam = null;
+    bulkReassignSwimmerIds = [];
+    if (bulkReassignModal) bulkReassignModal.classList.add('hidden');
+  }
+  async function openBulkReassignModal(teamName) {
+    bulkReassignSourceTeam = teamName;
+    try {
+      await api.ensureDbPath();
+      const data = await window.electronAPI.runBackend({
+        command: 'list-swimmers-by-team',
+        dbPath: state.dbPath,
+        payload: { team: teamName },
+      });
+      const swimmers = data.swimmers || [];
+      bulkReassignSwimmerIds = swimmers.map((s) => s.id).filter((id) => id != null);
+      const count = bulkReassignSwimmerIds.length;
+      const infoEl = document.getElementById('bulk-reassign-info');
+      if (infoEl) infoEl.textContent = count === 0 ? 'No swimmers in this team.' : `Move ${count} swimmer(s) from "${teamName}" to another team.`;
+      const selectEl = document.getElementById('bulk-reassign-target-team');
+      if (selectEl) {
+        const teams = (window.RelayApp.TEAMS || []).filter((t) => (t || '').trim() !== (teamName || '').trim());
+        selectEl.innerHTML = teams.length
+          ? teams.map((t) => `<option value="${utils.escapeHtml(t)}">${utils.escapeHtml(t)}</option>`).join('')
+          : '<option value="">No other teams</option>';
+      }
+      if (bulkReassignModal) bulkReassignModal.classList.remove('hidden');
+    } catch (err) {
+      alert('Error: ' + (err.message || String(err)));
+    }
+  }
+  if (bulkReassignClose) bulkReassignClose.addEventListener('click', closeBulkReassignModal);
+  if (bulkReassignCancel) bulkReassignCancel.addEventListener('click', closeBulkReassignModal);
+  if (bulkReassignModal) {
+    bulkReassignModal.addEventListener('click', (e) => { if (e.target === bulkReassignModal) closeBulkReassignModal(); });
+  }
+  if (bulkReassignSave) {
+    bulkReassignSave.addEventListener('click', async () => {
+      const selectEl = document.getElementById('bulk-reassign-target-team');
+      const targetTeam = selectEl ? selectEl.value.trim() : '';
+      if (!targetTeam || bulkReassignSwimmerIds.length === 0) {
+        alert('Select a target team.');
+        return;
+      }
+      api.setLoading('Reassigning…');
+      try {
+        await api.ensureDbPath();
+        await window.electronAPI.runBackend({
+          command: 'bulk-update-team',
+          dbPath: state.dbPath,
+          payload: { swimmer_ids: bulkReassignSwimmerIds, team: targetTeam },
+        });
+        const teamsData = await window.electronAPI.runBackend({ command: 'list-teams', dbPath: state.dbPath });
+        window.RelayApp.TEAMS = teamsData.teams || [];
+        closeBulkReassignModal();
+        if (window.RelayApp.admin && window.RelayApp.admin.refreshTeamsList) {
+          window.RelayApp.admin.refreshTeamsList();
+        }
+        if (window.RelayApp.api && window.RelayApp.api.loadSwimmers) {
+          window.RelayApp.api.loadSwimmers();
+        }
+      } catch (err) {
+        alert('Error: ' + (err.message || String(err)));
+      } finally {
+        api.clearLoading();
+      }
+    });
+  }
+
   function showAddSwimmerStep(step) {
     if (step === 1) {
       addSwimmerStep1.classList.remove('hidden');
@@ -418,8 +553,10 @@
     }
   }
   function ensureAddSwimmerAvailabilityCheckboxes() {
-    if (addSwimmerAvailability && addSwimmerAvailability.children.length === 0) {
-      addSwimmerAvailability.innerHTML = AVAILABILITY_KEYS.map(
+    const keys = window.RelayApp.AVAILABILITY_KEYS || AVAILABILITY_KEYS || [];
+    if (addSwimmerAvailability && (addSwimmerAvailability.children.length === 0 || addSwimmerAvailability.dataset.keys !== keys.join(','))) {
+      addSwimmerAvailability.dataset.keys = keys.join(',');
+      addSwimmerAvailability.innerHTML = keys.map(
         (k) =>
           `<label class="checkbox-label"><input type="checkbox" name="new-avail-${k}" data-key="${k}" /> ${k.replace('_', ' ')}</label>`
       ).join('');
@@ -439,7 +576,7 @@
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
-    AVAILABILITY_KEYS.forEach((k) => {
+    (window.RelayApp.AVAILABILITY_KEYS || AVAILABILITY_KEYS || []).forEach((k) => {
       const cb = addSwimmerAvailability && addSwimmerAvailability.querySelector(`input[name="new-avail-${k}"]`);
       if (cb) cb.checked = false;
     });
@@ -532,7 +669,7 @@
       };
       if (state.selectedMeetId != null) {
         const availability = {};
-        AVAILABILITY_KEYS.forEach((k) => {
+        (window.RelayApp.AVAILABILITY_KEYS || AVAILABILITY_KEYS || []).forEach((k) => {
           const cb = addSwimmerAvailability && addSwimmerAvailability.querySelector(`input[name="new-avail-${k}"]`);
           availability[k] = cb ? cb.checked : false;
         });
@@ -687,6 +824,8 @@
     closeAddSwimmerModal,
     openAddCompetitionModal,
     openEditCompetitionModal,
+    openDuplicateMeetModal,
+    openBulkReassignModal,
     openManageTeamsModal,
     closeManageTeamsModal,
     resetAddSwimmerForm,
