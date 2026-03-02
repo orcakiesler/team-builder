@@ -8,10 +8,17 @@ const STDIN_COMMANDS = [
   'update-swimmer',
   'delete-swimmers',
   'add-competition',
+  'update-competition',
+  'duplicate-competition',
   'delete-competitions',
   'add-swimmer',
   'add-team',
   'delete-team',
+  'list-swimmers-by-team',
+  'bulk-update-team',
+  'delete-swimmers-by-team',
+  'save-relay-types',
+  'reset-database',
 ];
 
 /** Default window size */

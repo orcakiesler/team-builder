@@ -4,10 +4,11 @@
   "description": "Build relay teams from Excel swimmer data",
   "main": "main.js",
   "scripts": {
-    "start": "npx electron .",
+    "build:html": "node scripts/build-html.js",
+    "start": "npm run build:html && npx electron .",
     "start:backend": "cd ../backend && poetry run python -m uvicorn api_server:app --host 127.0.0.1 --port 8765",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder",
+    "pack": "npm run build:html && electron-builder --dir",
+    "dist": "npm run build:html && electron-builder",
     "clean": "node -e \"const fs=require('fs');const path=require('path');const d=path.join(process.cwd(),'dist');if(fs.existsSync(d)){fs.rmSync(d,{recursive:true});console.log('Deleted dist');}const cache=path.join(process.env.LOCALAPPDATA||process.env.USERPROFILE,'electron-builder','Cache');if(fs.existsSync(cache)){fs.rmSync(cache,{recursive:true});console.log('Deleted electron-builder cache');}const nmCache=path.join(process.cwd(),'node_modules','.cache');if(fs.existsSync(nmCache)){fs.rmSync(nmCache,{recursive:true});console.log('Deleted node_modules/.cache');}\""
   },
   "build": {

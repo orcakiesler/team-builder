@@ -68,9 +68,9 @@ def people_from_db(db_path: Path, competition_id: int | None = None) -> list[Per
     return [swimmer_dict_to_person(r, default_team) for r in rows]
 
 
-def cmd_list_swimmers(db_path: Path, competition_id: int | None = None) -> dict:
+def cmd_list_swimmers(db_path: Path, competition_id: int | None = None, team_filter: str | None = None) -> dict:
     relay_db.ensure_database(db_path)
-    swimmers = relay_db.load_all(db_path, competition_id=competition_id)
+    swimmers = relay_db.load_all(db_path, competition_id=competition_id, team_filter=team_filter)
     if competition_id is not None:
         meet_teams = relay_db.load_competition_teams(db_path, competition_id)
         if meet_teams:
@@ -194,3 +194,34 @@ def cmd_delete_swimmers(db_path: Path, payload: dict) -> dict:
     relay_db.ensure_database(db_path)
     relay_db.delete_swimmers(db_path, [int(i) for i in ids])
     return {"swimmers": relay_db.load_all(db_path, competition_id=int(competition_id) if competition_id is not None else None)}
+
+
+def cmd_list_swimmers_by_team(db_path: Path, payload: dict) -> dict:
+    team = (payload.get("team") or "").strip()
+    if not team:
+        return {"swimmers": [], "count": 0}
+    relay_db.ensure_database(db_path)
+    swimmers = relay_db.load_all(db_path, team_filter=team)
+    return {"swimmers": swimmers, "count": len(swimmers)}
+
+
+def cmd_bulk_update_team(db_path: Path, payload: dict) -> dict:
+    swimmer_ids = payload.get("swimmer_ids") or []
+    new_team = (payload.get("team") or "").strip()
+    if not new_team:
+        raise ValueError("team is required")
+    if not swimmer_ids:
+        return {"updated": 0, "swimmers": relay_db.load_all(db_path)}
+    relay_db.ensure_database(db_path)
+    ids = [int(i) for i in swimmer_ids]
+    updated = relay_db.bulk_update_team(db_path, ids, new_team)
+    return {"updated": updated, "swimmers": relay_db.load_all(db_path)}
+
+
+def cmd_delete_swimmers_by_team(db_path: Path, payload: dict) -> dict:
+    team = (payload.get("team") or "").strip()
+    if not team:
+        raise ValueError("team is required")
+    relay_db.ensure_database(db_path)
+    deleted = relay_db.delete_swimmers_by_team(db_path, team)
+    return {"deleted": deleted, "teams": relay_db.load_teams(db_path)}

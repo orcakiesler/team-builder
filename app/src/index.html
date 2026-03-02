@@ -19,14 +19,11 @@
         <button type="button" class="meet-dropdown-trigger" id="meet-dropdown-trigger" title="Select a meet">Select a meet</button>
         <div class="meet-dropdown-panel hidden" id="meet-dropdown-panel">
           <div class="meet-dropdown-list" id="meet-dropdown-list"></div>
-          <div class="meet-dropdown-actions">
-            <button type="button" class="btn btn-danger btn-sm hidden" id="remove-selected-competitions-btn">Remove selected</button>
-          </div>
         </div>
       </div>
-      <button type="button" class="btn-add" id="add-competition-btn" title="Add competition">+</button>
     </div>
     <div class="top-bar-actions">
+      <button type="button" class="btn btn-secondary" id="open-admin-btn" title="Manage meets and teams">Admin</button>
       <button type="button" class="btn btn-secondary" id="open-import-modal-btn" title="Import from Excel">Import files</button>
       <button type="button" class="btn btn-primary run-btn" id="run-btn">Build teams</button>
     </div>
@@ -51,7 +48,6 @@
         <h2>Swimmers</h2>
         <div class="swimmers-toolbar">
           <button type="button" class="btn btn-primary btn-sm" id="add-swimmer-btn">Add swimmer</button>
-          <button type="button" class="btn btn-secondary btn-sm" id="manage-teams-btn" title="Add or remove teams">Manage teams</button>
           <button type="button" class="btn btn-secondary btn-sm" id="refresh-swimmers-btn" title="Reload list from database">Refresh</button>
           <button type="button" class="btn btn-secondary btn-sm" id="select-mode-btn">Select</button>
           <button type="button" class="btn btn-secondary btn-sm hidden" id="select-all-swimmers-btn">Select all</button>
@@ -239,6 +235,8 @@
     </div>
   </div>
 
+  <!-- PARTIAL: admin-panel -->
+
   <div class="loading-overlay hidden" id="loading">
     <div class="loading-card">
       <div class="loading-spinner" aria-hidden="true"></div>
@@ -250,6 +248,7 @@
   <script src="renderer/api.js"></script>
   <script src="renderer/teams.js"></script>
   <script src="renderer/modals.js"></script>
+  <script src="renderer/admin.js"></script>
   <script src="renderer/swimmers.js"></script>
   <script src="renderer/import.js"></script>
   <script src="renderer/meetSelector.js"></script>

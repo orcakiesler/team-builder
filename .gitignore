@@ -70,3 +70,6 @@ out/
 app/dist/
 app/out/
 app/release/
+
+# Generated HTML (built from partials)
+app/src/index.generated.html

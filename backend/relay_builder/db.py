@@ -9,6 +9,9 @@ from typing import Any, Dict, Iterable, List
 from .models import Person
 
 
+DEFAULT_RELAY_TYPES = ["freestyle", "medley", "freestyle_mix", "medley_mix"]
+
+
 def ensure_database(db_path: str | Path) -> None:
     """Create the swimmers database if it does not exist and run migrations."""
     create_database(db_path)
@@ -18,6 +21,7 @@ def ensure_database(db_path: str | Path) -> None:
     _migrate_teams_table(db_path)
     _migrate_competition_teams(db_path)
     _migrate_swimmers_team_masters_test(db_path)
+    _migrate_settings_table(db_path)
 
 
 def _migrate_swimmers_medical(db_path: str | Path) -> None:
@@ -167,6 +171,31 @@ def _migrate_swimmers_team_masters_test(db_path: str | Path) -> None:
         conn.commit()
 
 
+def _migrate_settings_table(db_path: str | Path) -> None:
+    """Create settings table and seed relay_types if missing."""
+    path = Path(db_path)
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            """
+        )
+        cur.execute("SELECT value FROM settings WHERE key = ?", ("relay_types",))
+        row = cur.fetchone()
+        if row is None:
+            cur.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ("relay_types", json.dumps(DEFAULT_RELAY_TYPES, ensure_ascii=False)),
+            )
+        conn.commit()
+
+
 def create_database(db_path: str | Path) -> None:
     """
     Create (or recreate) a simple SQLite database for swimmers and competitions.
@@ -295,27 +324,42 @@ def set_swimmer_availability_for_meet(
 def load_all(
     db_path: str | Path,
     competition_id: int | None = None,
+    team_filter: str | None = None,
 ) -> List[Dict[str, Any]]:
     """
     Load all swimmers, ordered by first name A-Z.
     If competition_id is set, merge availability for that meet from swimmer_meet_availability.
-    Otherwise availability is {} for each swimmer.
+    If team_filter is set, only return swimmers in that team.
     """
     path = Path(db_path)
     if not path.exists():
         return []
     with sqlite3.connect(path) as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT id, first_name, last_name, gender, year_of_birth,
-                   team,
-                   freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
-                   medical_date
-            FROM swimmers
-            ORDER BY first_name, last_name
-            """
-        )
+        if team_filter and str(team_filter).strip():
+            cur.execute(
+                """
+                SELECT id, first_name, last_name, gender, year_of_birth,
+                       team,
+                       freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
+                       medical_date
+                FROM swimmers
+                WHERE team = ?
+                ORDER BY first_name, last_name
+                """,
+                (team_filter.strip(),),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT id, first_name, last_name, gender, year_of_birth,
+                       team,
+                       freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
+                       medical_date
+                FROM swimmers
+                ORDER BY first_name, last_name
+                """
+            )
         rows = cur.fetchall()
     # Build list with id, ..., medical_date only (no availability_json in SELECT)
     swimmers = []
@@ -451,6 +495,38 @@ def add_competition(
         row_id = cur.lastrowid
     return {
         "id": row_id,
+        "name": name,
+        "start_date": start_date,
+        "end_date": end_date,
+        "location": location,
+    }
+
+
+def update_competition(
+    db_path: str | Path,
+    competition_id: int,
+    name: str,
+    start_date: str,
+    end_date: str,
+    location: str,
+) -> Dict[str, Any]:
+    """Update a competition by id. Returns the updated row as dict."""
+    path = Path(db_path)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE competitions
+            SET name = ?, start_date = ?, end_date = ?, location = ?
+            WHERE id = ?
+            """,
+            (name, start_date, end_date, location, competition_id),
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            raise ValueError(f"Competition id {competition_id} not found")
+    return {
+        "id": competition_id,
         "name": name,
         "start_date": start_date,
         "end_date": end_date,
@@ -655,5 +731,118 @@ def update_swimmer(
             f"UPDATE swimmers SET {', '.join(updates)} WHERE id = ?",
             args,
         )
+        conn.commit()
+
+
+def get_setting(db_path: str | Path, key: str) -> str | None:
+    """Return settings value for key, or None."""
+    path = Path(db_path)
+    if not path.exists():
+        return None
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+
+def set_setting(db_path: str | Path, key: str, value: str) -> None:
+    """Set a settings key to value (upsert)."""
+    path = Path(db_path)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+        conn.commit()
+
+
+def load_relay_types(db_path: str | Path) -> List[str]:
+    """Return list of relay type keys (e.g. freestyle, medley)."""
+    raw = get_setting(db_path, "relay_types")
+    if not raw:
+        return list(DEFAULT_RELAY_TYPES)
+    try:
+        out = json.loads(raw)
+        return out if isinstance(out, list) else list(DEFAULT_RELAY_TYPES)
+    except (json.JSONDecodeError, TypeError):
+        return list(DEFAULT_RELAY_TYPES)
+
+
+def save_relay_types(db_path: str | Path, keys: List[str]) -> None:
+    """Save relay type keys. Keys must be non-empty strings."""
+    cleaned = [str(k).strip() for k in keys if str(k).strip()]
+    set_setting(db_path, "relay_types", json.dumps(cleaned, ensure_ascii=False))
+
+
+def duplicate_competition(
+    db_path: str | Path,
+    source_id: int,
+    new_start_date: str,
+    new_end_date: str,
+) -> Dict[str, Any]:
+    """Create a new competition with same name, location, and teams as source; new dates. Returns new row."""
+    path = Path(db_path)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, name, start_date, end_date, location FROM competitions WHERE id = ?",
+            (source_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise ValueError(f"Competition id {source_id} not found")
+        _, name, _, _, location = row
+    new_comp = add_competition(db_path, name, new_start_date, new_end_date, location or "")
+    team_names = load_competition_teams(db_path, source_id)
+    if team_names:
+        set_competition_teams(db_path, new_comp["id"], team_names)
+    return new_comp
+
+
+def delete_swimmers_by_team(db_path: str | Path, team_name: str) -> int:
+    """Delete all swimmers in the given team. Returns count deleted."""
+    path = Path(db_path)
+    name = (team_name or "").strip()
+    if not name:
+        raise ValueError("Team name is required")
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM swimmers WHERE team = ?", (name,))
+        conn.commit()
+        return cur.rowcount
+
+
+def bulk_update_team(db_path: str | Path, swimmer_ids: List[int], new_team: str) -> int:
+    """Set team for all given swimmer ids. Returns count updated. new_team must exist in teams table."""
+    if not swimmer_ids or not (new_team or "").strip():
+        return 0
+    path = Path(db_path)
+    team = (new_team or "").strip()
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        placeholders = ",".join("?" * len(swimmer_ids))
+        cur.execute(
+            f"UPDATE swimmers SET team = ? WHERE id IN ({placeholders})",
+            [team] + list(swimmer_ids),
+        )
+        conn.commit()
+        return cur.rowcount
+
+
+def reset_database(db_path: str | Path, clear_teams: bool = False) -> None:
+    """Delete all swimmers and competitions. If clear_teams True, also delete all teams (and competition_teams)."""
+    path = Path(db_path)
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM swimmer_meet_availability")
+        cur.execute("DELETE FROM swimmers")
+        cur.execute("DELETE FROM competition_teams")
+        cur.execute("DELETE FROM competitions")
+        if clear_teams:
+            cur.execute("DELETE FROM teams")
         conn.commit()
 

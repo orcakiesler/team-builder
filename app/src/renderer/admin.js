@@ -1,0 +1,374 @@
+/**
+ * Admin panel: popup for managing meets (add/edit/remove) and teams (add/remove).
+ * Main window only shows a read-only meet selector; all editing is in the admin panel.
+ */
+(function () {
+  window.RelayApp = window.RelayApp || {};
+  const state = window.RelayApp.state;
+  const utils = window.RelayApp.utils;
+  const api = window.RelayApp.api;
+
+  const adminOverlay = document.getElementById('admin-panel-overlay');
+  const adminCloseBtn = document.getElementById('admin-panel-close');
+  const adminMeetsList = document.getElementById('admin-meets-list');
+  const adminAddMeetBtn = document.getElementById('admin-add-meet-btn');
+  const adminTeamsList = document.getElementById('admin-teams-list');
+  const adminNewTeamInput = document.getElementById('admin-new-team-name');
+  const adminAddTeamBtn = document.getElementById('admin-add-team-btn');
+
+  function closeAdminPanel() {
+    if (adminOverlay) adminOverlay.classList.add('hidden');
+  }
+
+  function isAdminPanelOpen() {
+    return adminOverlay && !adminOverlay.classList.contains('hidden');
+  }
+
+  async function refreshAdminContent() {
+    if (!isAdminPanelOpen()) return;
+    await refreshMeetsList();
+    await refreshTeamsList();
+  }
+
+  async function refreshMeetsList() {
+    if (!adminMeetsList) return;
+    try {
+      await api.ensureDbPath();
+      const data = await window.electronAPI.runBackend({ command: 'list-competitions', dbPath: state.dbPath });
+      const competitions = data.competitions || [];
+      state.currentCompetitions = competitions;
+      if (window.RelayApp.meetSelector && window.RelayApp.meetSelector.renderCompetitions) {
+        window.RelayApp.meetSelector.renderCompetitions(competitions);
+      }
+      if (competitions.length === 0) {
+        adminMeetsList.innerHTML = '<p class="text-muted">No meets yet. Add one below.</p>';
+        return;
+      }
+      adminMeetsList.innerHTML = competitions
+        .map(
+          (c) =>
+            `<div class="admin-meet-row" data-id="${c.id}">
+              <div class="admin-meet-row-info">
+                <span class="comp-name">${utils.escapeHtml(c.name)}</span>
+                <span class="comp-dates">${utils.escapeHtml(c.start_date)} – ${utils.escapeHtml(c.end_date)}</span>
+                ${c.location ? `<span class="comp-location">${utils.escapeHtml(c.location)}</span>` : ''}
+              </div>
+              <div class="admin-meet-row-actions">
+                <button type="button" class="btn btn-secondary btn-sm admin-duplicate-meet-btn" data-id="${c.id}" title="Duplicate with new dates">Duplicate</button>
+                <button type="button" class="btn btn-secondary btn-sm admin-edit-meet-btn" data-id="${c.id}">Edit</button>
+                <button type="button" class="btn btn-danger btn-sm admin-remove-meet-btn" data-id="${c.id}">Remove</button>
+              </div>
+            </div>`
+        )
+        .join('');
+
+      adminMeetsList.querySelectorAll('.admin-duplicate-meet-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = parseInt(btn.getAttribute('data-id'), 10);
+          const meet = competitions.find((c) => c.id === id);
+          if (meet && window.RelayApp.modals && window.RelayApp.modals.openDuplicateMeetModal) {
+            window.RelayApp.modals.openDuplicateMeetModal(meet);
+          }
+        });
+      });
+      adminMeetsList.querySelectorAll('.admin-edit-meet-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = parseInt(btn.getAttribute('data-id'), 10);
+          const meet = competitions.find((c) => c.id === id);
+          if (meet && window.RelayApp.modals && window.RelayApp.modals.openEditCompetitionModal) {
+            window.RelayApp.modals.openEditCompetitionModal(meet);
+          }
+        });
+      });
+      adminMeetsList.querySelectorAll('.admin-remove-meet-btn').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = parseInt(btn.getAttribute('data-id'), 10);
+          if (!confirm('Remove this meet? This cannot be undone.')) return;
+          api.setLoading('Removing…');
+          try {
+            await api.ensureDbPath();
+            const data = await window.electronAPI.runBackend({
+              command: 'delete-competitions',
+              dbPath: state.dbPath,
+              payload: { ids: [id] },
+            });
+            if (state.selectedMeetId === id) state.selectedMeetId = null;
+            if (window.RelayApp.meetSelector && window.RelayApp.meetSelector.renderCompetitions) {
+              window.RelayApp.meetSelector.renderCompetitions(data.competitions || []);
+            }
+            if (window.RelayApp.meetSelector && window.RelayApp.meetSelector.updateMeetTriggerText) {
+              window.RelayApp.meetSelector.updateMeetTriggerText();
+            }
+            await refreshMeetsList();
+          } catch (err) {
+            alert('Error: ' + (err.message || String(err)));
+          } finally {
+            api.clearLoading();
+          }
+        });
+      });
+    } catch (err) {
+      adminMeetsList.innerHTML = '<p class="text-muted">Failed to load meets.</p>';
+    }
+  }
+
+  async function refreshTeamsList() {
+    if (!adminTeamsList) return;
+    try {
+      await api.ensureDbPath();
+      const data = await window.electronAPI.runBackend({ command: 'list-teams', dbPath: state.dbPath });
+      const teams = Array.isArray(data.teams) ? data.teams : [];
+      window.RelayApp.TEAMS = teams;
+      adminTeamsList.innerHTML = teams
+        .map(
+          (name) =>
+            `<li class="team-list-item admin-team-row">
+              <span class="admin-team-name">${utils.escapeHtml(name)}</span>
+              <div class="admin-team-actions">
+                <button type="button" class="btn btn-secondary btn-sm admin-bulk-reassign-btn" data-team="${utils.escapeHtml(name)}" title="Reassign all swimmers to another team">Bulk reassign</button>
+                <button type="button" class="btn btn-danger btn-sm admin-delete-all-swimmers-btn" data-team="${utils.escapeHtml(name)}" title="Delete all swimmers in this team">Delete all swimmers</button>
+                <button type="button" class="btn btn-danger btn-sm btn-remove-team" data-team="${utils.escapeHtml(name)}">Remove team</button>
+              </div>
+            </li>`
+        )
+        .join('');
+      adminTeamsList.querySelectorAll('.admin-bulk-reassign-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const teamName = btn.getAttribute('data-team');
+          if (teamName && window.RelayApp.modals && window.RelayApp.modals.openBulkReassignModal) {
+            window.RelayApp.modals.openBulkReassignModal(teamName);
+          }
+        });
+      });
+      adminTeamsList.querySelectorAll('.admin-delete-all-swimmers-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const teamName = btn.getAttribute('data-team');
+          if (!teamName) return;
+          const data = await window.electronAPI.runBackend({ command: 'list-swimmers-by-team', dbPath: state.dbPath, payload: { team: teamName } }).catch(() => ({ count: 0 }));
+          const count = data.count || 0;
+          if (count === 0) { alert('No swimmers in this team.'); return; }
+          if (!confirm(`Delete all ${count} swimmer(s) in "${teamName}"? This cannot be undone.`)) return;
+          api.setLoading('Deleting…');
+          try {
+            await api.ensureDbPath();
+            await window.electronAPI.runBackend({ command: 'delete-swimmers-by-team', dbPath: state.dbPath, payload: { team: teamName } });
+            window.RelayApp.TEAMS = (await window.electronAPI.runBackend({ command: 'list-teams', dbPath: state.dbPath })).teams || [];
+            await refreshTeamsList();
+            if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
+              await api.loadSwimmers();
+            }
+          } catch (err) {
+            alert('Error: ' + (err.message || String(err)));
+          } finally {
+            api.clearLoading();
+          }
+        });
+      });
+      adminTeamsList.querySelectorAll('.btn-remove-team').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const teamName = btn.getAttribute('data-team');
+          if (!teamName || !confirm(`Remove team "${teamName}"? This will fail if any swimmer is assigned to it.`)) return;
+          api.setLoading('Removing…');
+          try {
+            await api.ensureDbPath();
+            const out = await window.electronAPI.runBackend({
+              command: 'delete-team',
+              dbPath: state.dbPath,
+              payload: { name: teamName },
+            });
+            window.RelayApp.TEAMS = out.teams || [];
+            await refreshTeamsList();
+          } catch (err) {
+            alert('Error: ' + (err.message || String(err)));
+          } finally {
+            api.clearLoading();
+          }
+        });
+      });
+    } catch (err) {
+      adminTeamsList.innerHTML = '<li class="text-muted">Failed to load teams.</li>';
+    }
+  }
+
+  function renderRelayTypesList() {
+    const listEl = document.getElementById('admin-relay-types-list');
+    if (!listEl) return;
+    const keys = window.RelayApp.AVAILABILITY_KEYS || [];
+    listEl.innerHTML = keys.length
+      ? keys.map((k) => `<span class="admin-relay-type-tag"><span>${utils.escapeHtml(k)}</span> <button type="button" class="btn-link btn-remove-relay-type" data-key="${utils.escapeHtml(k)}" aria-label="Remove">&times;</button></span>`).join('')
+      : '<p class="text-muted">No relay types. Add one below.</p>';
+    listEl.querySelectorAll('.btn-remove-relay-type').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-key');
+        const updated = (window.RelayApp.AVAILABILITY_KEYS || []).filter((x) => x !== key);
+        window.RelayApp.AVAILABILITY_KEYS = updated;
+        renderRelayTypesList();
+      });
+    });
+  }
+
+  async function refreshRelayTypesList() {
+    const listEl = document.getElementById('admin-relay-types-list');
+    if (!listEl) return;
+    try {
+      await api.ensureDbPath();
+      const data = await window.electronAPI.runBackend({ command: 'list-relay-types', dbPath: state.dbPath });
+      const keys = Array.isArray(data.relay_types) ? data.relay_types : [];
+      window.RelayApp.AVAILABILITY_KEYS = keys;
+      renderRelayTypesList();
+    } catch (_) {
+      listEl.innerHTML = '<p class="text-muted">Failed to load.</p>';
+    }
+  }
+
+  async function openAdminPanel() {
+    if (adminOverlay) adminOverlay.classList.remove('hidden');
+    await refreshMeetsList();
+    await refreshTeamsList();
+    await refreshRelayTypesList();
+    if (adminNewTeamInput) setTimeout(() => adminNewTeamInput.focus(), 100);
+  }
+
+  const adminBackupDbBtn = document.getElementById('admin-backup-db-btn');
+  const adminOpenDbFolderBtn = document.getElementById('admin-open-db-folder-btn');
+  const adminRelayTypesList = document.getElementById('admin-relay-types-list');
+  const adminNewRelayTypeInput = document.getElementById('admin-new-relay-type');
+  const adminAddRelayTypeBtn = document.getElementById('admin-add-relay-type-btn');
+  const adminSaveRelayTypesBtn = document.getElementById('admin-save-relay-types-btn');
+  const adminResetDbBtn = document.getElementById('admin-reset-db-btn');
+  const adminResetClearTeamsCb = document.getElementById('admin-reset-clear-teams');
+
+  if (adminBackupDbBtn) {
+    adminBackupDbBtn.addEventListener('click', async () => {
+      try {
+        const out = await window.electronAPI.backupDatabase();
+        if (out && !out.canceled && out.path) alert('Database backed up to:\n' + out.path);
+      } catch (err) {
+        alert('Backup failed: ' + (err.message || String(err)));
+      }
+    });
+  }
+  if (adminOpenDbFolderBtn) {
+    adminOpenDbFolderBtn.addEventListener('click', async () => {
+      try {
+        await window.electronAPI.openDatabaseFolder();
+      } catch (err) {
+        alert('Failed to open folder: ' + (err.message || String(err)));
+      }
+    });
+  }
+  if (adminAddRelayTypeBtn && adminNewRelayTypeInput) {
+    adminAddRelayTypeBtn.addEventListener('click', () => {
+      const key = adminNewRelayTypeInput.value.trim().replace(/\s+/g, '_');
+      if (!key) return;
+      const keys = window.RelayApp.AVAILABILITY_KEYS || [];
+      if (keys.includes(key)) return;
+      window.RelayApp.AVAILABILITY_KEYS = keys.concat(key);
+      adminNewRelayTypeInput.value = '';
+      // Just redraw locally; do not reload from backend so unsaved keys aren't lost.
+      renderRelayTypesList();
+    });
+  }
+  if (adminSaveRelayTypesBtn) {
+    adminSaveRelayTypesBtn.addEventListener('click', async () => {
+      const keys = window.RelayApp.AVAILABILITY_KEYS || [];
+      api.setLoading('Saving…');
+      try {
+        await api.ensureDbPath();
+        await window.electronAPI.runBackend({ command: 'save-relay-types', dbPath: state.dbPath, payload: { relay_types: keys } });
+        refreshRelayTypesList();
+      } catch (err) {
+        alert('Error: ' + (err.message || String(err)));
+      } finally {
+        api.clearLoading();
+      }
+    });
+  }
+  if (adminResetDbBtn) {
+    adminResetDbBtn.addEventListener('click', async () => {
+      const clearTeams = adminResetClearTeamsCb && adminResetClearTeamsCb.checked;
+      if (!confirm('Reset database? This will delete ALL swimmers and meets.' + (clearTeams ? ' All teams will also be removed.' : '') + ' This cannot be undone.')) return;
+      const confirmText = 'RESET';
+      const entered = prompt('Type ' + confirmText + ' to confirm:');
+      if (entered !== confirmText) return;
+      api.setLoading('Resetting…');
+      try {
+        await api.ensureDbPath();
+        await window.electronAPI.runBackend({ command: 'reset-database', dbPath: state.dbPath, payload: { clear_teams: clearTeams } });
+        state.currentCompetitions = [];
+        state.selectedMeetId = null;
+        state.currentSwimmers = [];
+        window.RelayApp.TEAMS = [];
+        if (window.RelayApp.meetSelector && window.RelayApp.meetSelector.renderCompetitions) {
+          window.RelayApp.meetSelector.renderCompetitions([]);
+        }
+        if (window.RelayApp.meetSelector && window.RelayApp.meetSelector.updateMeetTriggerText) {
+          window.RelayApp.meetSelector.updateMeetTriggerText();
+        }
+        if (window.RelayApp.swimmers && window.RelayApp.swimmers.renderSwimmers) {
+          window.RelayApp.swimmers.renderSwimmers([]);
+        }
+        await refreshMeetsList();
+        await refreshTeamsList();
+        await refreshRelayTypesList();
+      } catch (err) {
+        alert('Error: ' + (err.message || String(err)));
+      } finally {
+        api.clearLoading();
+      }
+    });
+  }
+
+  if (adminCloseBtn) adminCloseBtn.addEventListener('click', closeAdminPanel);
+  if (adminOverlay) {
+    adminOverlay.addEventListener('click', (e) => {
+      if (e.target === adminOverlay) closeAdminPanel();
+    });
+  }
+  if (adminAddMeetBtn) {
+    adminAddMeetBtn.addEventListener('click', () => {
+      if (window.RelayApp.modals && window.RelayApp.modals.openAddCompetitionModal) {
+        window.RelayApp.modals.openAddCompetitionModal();
+      }
+    });
+  }
+  if (adminAddTeamBtn && adminNewTeamInput) {
+    adminAddTeamBtn.addEventListener('click', async () => {
+      const name = adminNewTeamInput.value.trim();
+      if (!name) {
+        alert('Enter a team name.');
+        return;
+      }
+      api.setLoading('Adding team…');
+      try {
+        await api.ensureDbPath();
+        const out = await window.electronAPI.runBackend({
+          command: 'add-team',
+          dbPath: state.dbPath,
+          payload: { name },
+        });
+        window.RelayApp.TEAMS = out.teams || [];
+        adminNewTeamInput.value = '';
+        await refreshTeamsList();
+      } catch (err) {
+        alert('Error: ' + (err.message || String(err)));
+      } finally {
+        api.clearLoading();
+      }
+    });
+  }
+
+  window.RelayApp.admin = {
+    openAdminPanel,
+    closeAdminPanel,
+    refreshAdminContent,
+    refreshMeetsList,
+    refreshTeamsList,
+    refreshRelayTypesList,
+    isAdminPanelOpen,
+  };
+})();

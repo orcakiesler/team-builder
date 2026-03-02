@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -61,7 +61,13 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+  // `index.generated.html` is composed from partials at build/start time.
+  // Fallback to `index.html` so devs can still run Electron directly.
+  const generatedIndex = path.join(__dirname, 'src', 'index.generated.html');
+  const indexToLoad = fs.existsSync(generatedIndex)
+    ? generatedIndex
+    : path.join(__dirname, 'src', 'index.html');
+  mainWindow.loadFile(indexToLoad);
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
@@ -79,6 +85,30 @@ app.on('activate', () => {
 });
 
 ipcMain.handle('get-db-path', () => getDbPath());
+
+ipcMain.handle('backup-database', async () => {
+  const dbPath = getDbPath();
+  const defaultName = `swimmers-backup-${new Date().toISOString().slice(0, 10)}.db`;
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Backup database',
+    defaultPath: defaultName,
+    filters: [{ name: 'SQLite database', extensions: ['db'] }],
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+  try {
+    fs.copyFileSync(dbPath, result.filePath);
+    return { canceled: false, path: result.filePath };
+  } catch (err) {
+    throw new Error(err.message || 'Failed to copy database');
+  }
+});
+
+ipcMain.handle('open-database-folder', async () => {
+  const dbPath = getDbPath();
+  const dir = path.dirname(dbPath);
+  await shell.openPath(dir);
+  return { path: dir };
+});
 
 ipcMain.handle('select-file', async (_, { which }) => {
   const result = await dialog.showOpenDialog(mainWindow, {

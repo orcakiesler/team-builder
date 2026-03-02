@@ -152,6 +152,122 @@ body {
 .meet-dropdown-actions { padding: 0.5rem 0.75rem; border-top: 1px solid var(--border); }
 .btn-add { flex-shrink: 0; }
 
+/* Admin panel popup */
+.modal-overlay-admin .modal-admin {
+  max-width: 520px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.admin-panel-body {
+  overflow-y: auto;
+}
+.admin-section {
+  margin-bottom: 1.5rem;
+}
+.admin-section:last-child {
+  margin-bottom: 0;
+}
+.admin-section h4 {
+  margin: 0 0 0.35rem 0;
+  font-size: 1rem;
+}
+.admin-hint {
+  font-size: 0.85rem;
+  margin: 0 0 0.75rem 0;
+}
+.admin-meets-list {
+  margin-bottom: 0.75rem;
+}
+.admin-meet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+}
+.admin-meet-row-info {
+  flex: 1;
+  min-width: 0;
+}
+.admin-meet-row-info .comp-name { font-weight: 600; display: block; }
+.admin-meet-row-info .comp-dates,
+.admin-meet-row-info .comp-location { color: var(--text-muted); font-size: 0.8em; }
+.admin-meet-row-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.admin-teams-list {
+  margin-top: 0.5rem;
+}
+.admin-db-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.admin-team-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.admin-team-name {
+  flex: 1;
+  min-width: 0;
+}
+.admin-team-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.admin-relay-types-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+.admin-relay-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.4rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 0.2rem;
+  font-size: 1.1em;
+  line-height: 1;
+}
+.btn-link:hover {
+  color: var(--text);
+}
+.admin-danger-zone {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  background: rgba(248, 81, 73, 0.06);
+}
+.admin-danger-zone h4 {
+  color: var(--danger, #f85149);
+}
+.admin-danger-zone .checkbox-label {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
 .header {
   padding: 1.5rem 2rem;
   border-bottom: 1px solid var(--border);
