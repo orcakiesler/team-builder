@@ -61,7 +61,13 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+  // `index.generated.html` is composed from partials at build/start time.
+  // Fallback to `index.html` so devs can still run Electron directly.
+  const generatedIndex = path.join(__dirname, 'src', 'index.generated.html');
+  const indexToLoad = fs.existsSync(generatedIndex)
+    ? generatedIndex
+    : path.join(__dirname, 'src', 'index.html');
+  mainWindow.loadFile(indexToLoad);
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 

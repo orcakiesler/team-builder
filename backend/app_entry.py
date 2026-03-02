@@ -19,13 +19,20 @@ from commands import (
     cmd_add_swimmer,
     cmd_add_team,
     cmd_build_teams,
+    cmd_bulk_update_team,
     cmd_delete_competitions,
     cmd_delete_swimmers,
+    cmd_delete_swimmers_by_team,
     cmd_delete_team,
+    cmd_duplicate_competition,
     cmd_import_files,
     cmd_list_competitions,
-    cmd_list_teams,
+    cmd_list_relay_types,
     cmd_list_swimmers,
+    cmd_list_swimmers_by_team,
+    cmd_list_teams,
+    cmd_reset_database,
+    cmd_save_relay_types,
     cmd_update_competition,
     cmd_update_swimmer,
     run_legacy,
@@ -41,17 +48,24 @@ def main() -> None:
         choices=[
             "list-teams",
             "list-swimmers",
+            "list-swimmers-by-team",
             "build-teams",
             "import-files",
             "update-swimmer",
             "delete-swimmers",
+            "delete-swimmers-by-team",
+            "bulk-update-team",
             "list-competitions",
             "add-competition",
             "update-competition",
+            "duplicate-competition",
             "delete-competitions",
             "add-swimmer",
             "add-team",
             "delete-team",
+            "list-relay-types",
+            "save-relay-types",
+            "reset-database",
         ],
     )
     parser.add_argument("--best-times", default=None)
@@ -114,6 +128,20 @@ def main() -> None:
                 out = cmd_add_swimmer(db_path, payload)
             elif args.command == "delete-competitions":
                 out = cmd_delete_competitions(db_path, json.load(sys.stdin))
+            elif args.command == "duplicate-competition":
+                out = cmd_duplicate_competition(db_path, json.load(sys.stdin))
+            elif args.command == "list-swimmers-by-team":
+                out = cmd_list_swimmers_by_team(db_path, json.load(sys.stdin))
+            elif args.command == "bulk-update-team":
+                out = cmd_bulk_update_team(db_path, json.load(sys.stdin))
+            elif args.command == "delete-swimmers-by-team":
+                out = cmd_delete_swimmers_by_team(db_path, json.load(sys.stdin))
+            elif args.command == "list-relay-types":
+                out = cmd_list_relay_types(db_path)
+            elif args.command == "save-relay-types":
+                out = cmd_save_relay_types(db_path, json.load(sys.stdin))
+            elif args.command == "reset-database":
+                out = cmd_reset_database(db_path, json.load(sys.stdin))
             else:
                 raise ValueError(f"Unknown command: {args.command}")
             print(json.dumps(out, ensure_ascii=False))

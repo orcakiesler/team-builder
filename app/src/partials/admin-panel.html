@@ -1,0 +1,135 @@
+  <div class="modal-overlay modal-overlay-admin hidden" id="admin-panel-overlay">
+    <div class="modal modal-admin" id="admin-panel">
+      <div class="modal-header">
+        <h3>Admin panel</h3>
+        <button type="button" class="modal-close" id="admin-panel-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body admin-panel-body">
+        <section class="admin-section">
+          <h4>Database</h4>
+          <p class="text-muted admin-hint">Backup your data or open the folder where the database is stored.</p>
+          <div class="admin-db-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="admin-backup-db-btn">Backup database</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="admin-open-db-folder-btn">Open database folder</button>
+          </div>
+        </section>
+        <section class="admin-section">
+          <h4>Meets</h4>
+          <p class="text-muted admin-hint">Add, edit, duplicate, or remove meets.</p>
+          <div class="admin-meets-list" id="admin-meets-list"></div>
+          <button type="button" class="btn btn-primary btn-sm" id="admin-add-meet-btn">Add meet</button>
+        </section>
+        <section class="admin-section">
+          <h4>Teams</h4>
+          <p class="text-muted admin-hint">Add or remove teams. Bulk reassign or delete all swimmers in a team.</p>
+          <div class="form-group form-inline">
+            <input type="text" id="admin-new-team-name" placeholder="New team name" />
+            <button type="button" class="btn btn-primary btn-sm" id="admin-add-team-btn">Add team</button>
+          </div>
+          <ul class="teams-list admin-teams-list" id="admin-teams-list"></ul>
+        </section>
+        <section class="admin-section">
+          <h4>Relay types</h4>
+          <p class="text-muted admin-hint">Availability options shown when adding/editing swimmers (e.g. freestyle, medley).</p>
+          <div class="admin-relay-types-list" id="admin-relay-types-list"></div>
+          <div class="form-group form-inline">
+            <input type="text" id="admin-new-relay-type" placeholder="New relay type key" />
+            <button type="button" class="btn btn-primary btn-sm" id="admin-add-relay-type-btn">Add</button>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="admin-save-relay-types-btn">Save relay types</button>
+        </section>
+        <section class="admin-section admin-danger-zone">
+          <h4>Danger zone</h4>
+          <p class="text-muted admin-hint">Reset deletes all swimmers and meets. Optionally clear teams too. This cannot be undone.</p>
+          <label class="checkbox-label"><input type="checkbox" id="admin-reset-clear-teams" /> Also clear all teams</label>
+          <button type="button" class="btn btn-danger btn-sm" id="admin-reset-db-btn">Reset database</button>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="duplicate-meet-modal-overlay">
+    <div class="modal" id="duplicate-meet-modal">
+      <div class="modal-header">
+        <h3>Duplicate meet</h3>
+        <button type="button" class="modal-close" id="duplicate-meet-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted" id="duplicate-meet-source-info"></p>
+        <form id="duplicate-meet-form">
+          <input type="hidden" id="duplicate-meet-source-id" />
+          <div class="form-group">
+            <label for="duplicate-meet-start">New start date</label>
+            <input type="date" id="duplicate-meet-start" required />
+          </div>
+          <div class="form-group">
+            <label for="duplicate-meet-end">New end date</label>
+            <input type="date" id="duplicate-meet-end" required />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="duplicate-meet-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="duplicate-meet-save">Duplicate</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="bulk-reassign-modal-overlay">
+    <div class="modal" id="bulk-reassign-modal">
+      <div class="modal-header">
+        <h3>Bulk reassign team</h3>
+        <button type="button" class="modal-close" id="bulk-reassign-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted" id="bulk-reassign-info"></p>
+        <div class="form-group">
+          <label for="bulk-reassign-target-team">Move swimmers to team</label>
+          <select id="bulk-reassign-target-team"></select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="bulk-reassign-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="bulk-reassign-save">Reassign</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="edit-competition-modal-overlay">
+    <div class="modal" id="edit-competition-modal">
+      <div class="modal-header">
+        <h3>Edit meet</h3>
+        <button type="button" class="modal-close" id="edit-competition-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-competition-form">
+          <input type="hidden" id="edit-comp-id" />
+          <div class="form-group">
+            <label for="edit-comp-name">Name</label>
+            <input type="text" id="edit-comp-name" required placeholder="e.g. Regional Champs" />
+          </div>
+          <div class="form-group">
+            <label for="edit-comp-start">Start date</label>
+            <input type="date" id="edit-comp-start" required />
+          </div>
+          <div class="form-group">
+            <label for="edit-comp-end">End date</label>
+            <input type="date" id="edit-comp-end" required />
+          </div>
+          <div class="form-group">
+            <label for="edit-comp-location">Location</label>
+            <input type="text" id="edit-comp-location" placeholder="e.g. City Pool" />
+          </div>
+          <div class="form-group">
+            <label>Teams in this meet <span class="required">*</span></label>
+            <p class="text-muted form-hint">Select at least one team.</p>
+            <div class="meet-teams-create-checkboxes" id="edit-comp-teams-checkboxes"></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="edit-competition-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="edit-competition-save">Save</button>
+      </div>
+    </div>
+  </div>
