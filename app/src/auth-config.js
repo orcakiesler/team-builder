@@ -7,4 +7,4 @@
  *   "npm run build:html" and "npm run dist", and share the installer.
  *   Friends only install and use—no Poetry or servers.
  */
-window.RELAY_AUTH_BASE_URL = 'http://127.0.0.1:8000';
+window.RELAY_AUTH_BASE_URL = 'https://relay-builder-auth.onrender.com';
