@@ -180,41 +180,6 @@ body {
 .admin-meets-list {
   margin-bottom: 0.75rem;
 }
-.admin-users-list {
-  margin-bottom: 0.75rem;
-}
-.admin-user-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  padding: 0.5rem 0.75rem;
-  background: var(--surface);
-  border-radius: var(--radius);
-  margin-bottom: 0.35rem;
-  font-size: 0.9rem;
-}
-.admin-user-row-info {
-  flex: 1;
-  min-width: 0;
-}
-.admin-user-row-info .user-email { font-weight: 600; display: block; }
-.admin-user-row-info .user-role { color: var(--text-muted); font-size: 0.85em; }
-.admin-user-link {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-shrink: 0;
-}
-.admin-user-link select {
-  min-width: 140px;
-  padding: 0.35rem 0.5rem;
-  font-size: 0.85rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-}
 .admin-meet-row {
   display: flex;
   align-items: center;
@@ -306,12 +271,8 @@ body {
 .header {
   padding: 1.5rem 2rem;
   border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.5rem;
 }
-.header-main h1 {
+.header h1 {
   margin: 0 0 0.25rem 0;
   font-size: 1.5rem;
   font-weight: 600;
@@ -320,10 +281,6 @@ body {
   margin: 0;
   color: var(--text-muted);
   font-size: 0.9rem;
-}
-.header-actions .btn-sm {
-  padding: 0.4rem 0.9rem;
-  font-size: 0.85rem;
 }
 
 .file-cards {
@@ -912,34 +869,4 @@ body {
 
 .hidden {
   display: none !important;
-}
-
-.swimmer-profile-section {
-  padding: 1rem 2rem 2rem;
-}
-.swimmer-profile-section .panel h2 {
-  margin: 0;
-  padding: 1rem 1.25rem;
-  font-size: 1rem;
-  font-weight: 600;
-  border-bottom: 1px solid var(--border);
-}
-.swimmer-profile-card {
-  padding: 1rem 1.25rem;
-  font-size: 0.9rem;
-}
-.swimmer-profile-card dl {
-  margin: 0;
-  display: grid;
-  gap: 0.35rem;
-}
-.swimmer-profile-card dt {
-  color: var(--text-muted);
-  font-weight: 500;
-}
-.swimmer-profile-card dd {
-  margin: 0 0 0.5rem 0;
-}
-.swimmer-profile-card dd:last-child {
-  margin-bottom: 0;
 }

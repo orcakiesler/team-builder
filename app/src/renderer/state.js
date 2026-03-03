@@ -2,7 +2,6 @@
   window.RelayApp = window.RelayApp || {};
   const STORAGE_LAST_MEET = 'relay_last_meet_id';
   const STORAGE_LAST_TEAMS = 'relay_last_teams';
-  const STORAGE_AUTH_TOKEN = 'relay_auth_token';
 
   const state = {
     dbPath: null,
@@ -11,23 +10,7 @@
     selectedMeetId: null,
     lastTeamsResult: null,
     swimmerSelectMode: false,
-    /** Current logged-in user from /auth/me: { role: 'admin'|'coach'|'swimmer', swimmer_id: number|null } */
-    currentUser: null,
   };
-
-  function getAuthToken() {
-    try {
-      return localStorage.getItem(STORAGE_AUTH_TOKEN);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function clearAuthToken() {
-    try {
-      localStorage.removeItem(STORAGE_AUTH_TOKEN);
-    } catch (_) {}
-  }
 
   function getLastMeetId() {
     try {
@@ -64,6 +47,4 @@
   window.RelayApp.setLastMeetId = setLastMeetId;
   window.RelayApp.getLastTeamsByMeet = getLastTeamsByMeet;
   window.RelayApp.setLastTeamsForMeet = setLastTeamsForMeet;
-  window.RelayApp.getAuthToken = getAuthToken;
-  window.RelayApp.clearAuthToken = clearAuthToken;
 })();

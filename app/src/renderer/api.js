@@ -7,18 +7,6 @@
   const pathNamesRelays = document.getElementById('path-names-relays');
   const runHint = document.getElementById('run-hint');
 
-  const AUTH_BASE_URL = window.RELAY_AUTH_BASE_URL || 'http://127.0.0.1:8000';
-
-  async function fetchAuthMe() {
-    const token = window.RelayApp.getAuthToken && window.RelayApp.getAuthToken();
-    if (!token) return null;
-    const resp = await fetch(`${AUTH_BASE_URL}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!resp.ok) return null;
-    return resp.json();
-  }
-
   async function ensureDbPath() {
     if (!state.dbPath) state.dbPath = await window.electronAPI.getDbPath();
     return state.dbPath;
@@ -80,13 +68,11 @@
   }
 
   window.RelayApp.api = {
-    AUTH_BASE_URL,
     ensureDbPath,
     setLoading,
     clearLoading,
     getPaths,
     loadSwimmers,
     loadCompetitions,
-    fetchAuthMe,
   };
 })();

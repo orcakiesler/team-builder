@@ -28,7 +28,6 @@
     if (!isAdminPanelOpen()) return;
     await refreshMeetsList();
     await refreshTeamsList();
-    await refreshAdminUsersList();
   }
 
   async function refreshMeetsList() {
@@ -226,93 +225,11 @@
     }
   }
 
-  async function refreshAdminUsersList() {
-    const listEl = document.getElementById('admin-users-list');
-    if (!listEl) return;
-    const token = window.RelayApp.getAuthToken && window.RelayApp.getAuthToken();
-    const baseUrl = window.RELAY_AUTH_BASE_URL || api.AUTH_BASE_URL || 'http://127.0.0.1:8000';
-    if (!token) {
-      listEl.innerHTML = '<p class="text-muted">Sign in required to manage users.</p>';
-      return;
-    }
-    try {
-      const usersResp = await fetch(`${baseUrl}/admin/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!usersResp.ok) {
-        listEl.innerHTML = '<p class="text-muted">Could not load users.</p>';
-        return;
-      }
-      const users = await usersResp.json();
-      await api.ensureDbPath();
-      const swimmersData = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath: state.dbPath });
-      const swimmers = swimmersData.swimmers || [];
-      if (users.length === 0) {
-        listEl.innerHTML = '<p class="text-muted">No user accounts yet.</p>';
-        return;
-      }
-      listEl.innerHTML = users
-        .map(function (u) {
-          const roleLabel = u.role === 'admin' ? 'Admin' : u.role === 'coach' ? 'Coach' : u.role === 'swimmer' ? 'Swimmer' : u.role || '—';
-          let linkHtml = '';
-          if (u.role === 'swimmer') {
-            const options = swimmers.map(function (s) {
-              const sel = s.id === u.swimmer_id ? ' selected' : '';
-              return '<option value="' + (s.id || '') + '"' + sel + '>' + (utils.escapeHtml(s.full_name || '') + ' (ID ' + s.id + ')') + '</option>';
-            }).join('');
-            linkHtml =
-              '<div class="admin-user-link">' +
-              '<select class="admin-user-link-select" data-user-id="' + u.id + '">' +
-              '<option value="">— No profile —</option>' + options +
-              '</select>' +
-              '<button type="button" class="btn btn-primary btn-sm admin-user-link-btn" data-user-id="' + u.id + '">Link</button>' +
-              '</div>';
-          }
-          return (
-            '<div class="admin-user-row" data-user-id="' + u.id + '">' +
-            '<div class="admin-user-row-info">' +
-            '<span class="user-email">' + utils.escapeHtml(u.email) + '</span>' +
-            '<span class="user-role">' + roleLabel + (u.swimmer_id != null ? ' · Linked to swimmer ' + u.swimmer_id : '') + '</span>' +
-            '</div>' + linkHtml +
-            '</div>'
-          );
-        })
-        .join('');
-
-      listEl.querySelectorAll('.admin-user-link-btn').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
-          const userId = btn.getAttribute('data-user-id');
-          const select = listEl.querySelector('.admin-user-link-select[data-user-id="' + userId + '"]');
-          const val = select ? select.value : '';
-          const swimmerId = val === '' ? null : parseInt(val, 10);
-          try {
-            const body = swimmerId != null ? JSON.stringify({ swimmer_id: swimmerId }) : JSON.stringify({ swimmer_id: null });
-            const resp = await fetch(`${baseUrl}/admin/users/${userId}/link-swimmer`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-              },
-              body: body,
-            });
-            if (!resp.ok) throw new Error('Link failed');
-            await refreshAdminUsersList();
-          } catch (err) {
-            alert('Error: ' + (err.message || String(err)));
-          }
-        });
-      });
-    } catch (err) {
-      listEl.innerHTML = '<p class="text-muted">Could not load users: ' + (err.message || String(err)) + '</p>';
-    }
-  }
-
   async function openAdminPanel() {
     if (adminOverlay) adminOverlay.classList.remove('hidden');
     await refreshMeetsList();
     await refreshTeamsList();
     await refreshRelayTypesList();
-    await refreshAdminUsersList();
     if (adminNewTeamInput) setTimeout(() => adminNewTeamInput.focus(), 100);
   }
 
@@ -452,7 +369,6 @@
     refreshMeetsList,
     refreshTeamsList,
     refreshRelayTypesList,
-    refreshAdminUsersList,
     isAdminPanelOpen,
   };
 })();

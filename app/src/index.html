@@ -8,13 +8,8 @@
 </head>
 <body>
   <header class="header">
-    <div class="header-main">
-      <h1>Relay Team Builder</h1>
-      <p class="subtitle">Build your best relay teams, for any meet, event, or age group</p>
-    </div>
-    <div class="header-actions">
-      <button type="button" class="btn btn-secondary btn-sm" id="logout-btn" title="Sign out">Logout</button>
-    </div>
+    <h1>Relay Team Builder</h1>
+    <p class="subtitle">Build your best relay teams, for any meet, event, or age group</p>
   </header>
 
   <section class="top-bar">
@@ -37,18 +32,6 @@
   <section class="meet-teams-bar hidden" id="meet-teams-section">
     <span class="meet-teams-label">Teams in this meet</span>
     <div class="meet-teams-checkboxes" id="meet-teams-checkboxes"></div>
-  </section>
-
-  <section class="swimmer-profile-section hidden" id="swimmer-profile-section">
-    <div class="panel" style="max-width: 560px; margin: 0 auto;">
-      <h2>My profile</h2>
-      <div id="swimmer-profile-content">
-        <p class="text-muted">Loading…</p>
-      </div>
-      <div class="swimmer-profile-actions" style="padding: 1rem 1.25rem; border-top: 1px solid var(--border);">
-        <button type="button" class="btn btn-primary" id="swimmer-profile-edit-btn" style="display: none;">Edit my profile</button>
-      </div>
-    </div>
   </section>
 
   <section class="results-section" id="results-section">
@@ -260,7 +243,6 @@
       <p class="loading-message" id="loading-message">Loading…</p>
     </div>
   </div>
-  <script src="auth-config.js"></script>
   <script src="renderer/utils.js"></script>
   <script src="renderer/state.js"></script>
   <script src="renderer/api.js"></script>
