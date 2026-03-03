@@ -1,0 +1,11 @@
+# Render Blueprint: auth backend only.
+# Deploy from dashboard: connect repo, or use this if you use "New Blueprint".
+services:
+  - type: web
+    name: relay-builder-auth
+    runtime: python
+    region: frankfurt  # or oregon, ohio, etc.
+    rootDir: auth-backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Set AUTH_SECRET_KEY and AUTH_DATABASE_URL in Render dashboard → Environment

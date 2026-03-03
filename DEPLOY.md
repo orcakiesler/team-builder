@@ -38,6 +38,21 @@ Your friends should only **install the app and use it**. You run the auth server
 - They run it, install, open the app.
 - They sign up (Create account) or log in. Everything goes to your auth server; they don’t install Poetry or run any server.
 
+## Render: if the build fails ("Exited with status 1")
+
+1. On Render, open your service → **Logs**.
+2. Click the **failed** deploy (red X).
+3. In the log, find the **build** section (not "Starting service"). Scroll to the **bottom** of the build output.
+4. The last few lines usually show the real error (e.g. `ModuleNotFoundError`, `No such file or directory`, `could not find requirements.txt`). Copy those lines so we can fix the exact issue.
+
+**Manual service setup (no Root Directory):** Leave **Root Directory** empty. Use:
+- **Build command:** `cd auth-backend && pip install -r requirements.txt`
+- **Start command:** `cd auth-backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+
+**Python version:** If the build fails with `maturin` / `pydantic-core` / "Read-only file system", Render may be using a Python version (e.g. 3.14) that has no pre-built wheels. The repo includes a **`.python-version`** file set to `3.11.7` so Render uses a version with wheels. Commit and push `.python-version` (at repo root and/or in `auth-backend/`), then redeploy.
+
+**Optional:** The repo has a `render.yaml` blueprint. You can create a new Blueprint from the repo and Render will use it, or keep your current service and just fix the commands above.
+
 ## Summary
 
 | Who        | Does what |
