@@ -80,13 +80,12 @@ def register_user(payload: UserCreate, db: Session = Depends(get_db)) -> UserRea
         db.delete(code_row)
         db.flush()
     else:
+        # No invite code: default to swimmer. Coach/admin only via invite codes.
         total_users = db.scalar(select(func.count()).select_from(User)) or 0
         if total_users == 0:
             role = "admin"
         else:
-            role = payload.role
-            if role == "admin":
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot self-assign admin")
+            role = "swimmer"
 
     user = User(
         email=payload.email,

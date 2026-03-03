@@ -38,7 +38,6 @@
     const authUrlEl = document.getElementById('login-auth-url');
     const signupForm = document.getElementById('signup-form');
     const signupEmail = document.getElementById('signup-email');
-    const signupRole = document.getElementById('signup-role');
     const signupPassword = document.getElementById('signup-password');
     const signupPasswordConfirm = document.getElementById('signup-password-confirm');
     const signupInviteCode = document.getElementById('signup-invite-code');
@@ -148,9 +147,8 @@
         signupSubmitBtn.disabled = true;
         signupSubmitBtn.textContent = 'Creating account…';
 
-        const role = (signupRole && signupRole.value) || 'coach';
         const inviteCode = (signupInviteCode && signupInviteCode.value && signupInviteCode.value.trim()) || '';
-        const payload = { email, password, role };
+        const payload = { email, password, role: 'swimmer' };
         if (inviteCode) payload.invite_code = inviteCode.trim().toUpperCase();
         try {
           const resp = await fetch(`${AUTH_BASE_URL}/auth/register`, {
