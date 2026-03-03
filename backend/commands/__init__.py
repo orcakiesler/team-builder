@@ -22,6 +22,13 @@ from .build_teams import cmd_build_teams, run_legacy
 from .import_files import cmd_import_files
 from .settings import cmd_list_relay_types, cmd_reset_database, cmd_save_relay_types
 from .teams import cmd_add_team, cmd_delete_team, cmd_list_teams
+from .coaches import (
+    cmd_get_coach,
+    cmd_list_coaches,
+    cmd_list_teams_with_coaches,
+    cmd_set_team_coaches,
+    cmd_update_coach,
+)
 
 __all__ = [
     "cmd_add_swimmer",
@@ -40,6 +47,11 @@ __all__ = [
     "cmd_list_swimmers",
     "cmd_list_swimmers_by_team",
     "cmd_list_teams",
+    "cmd_list_teams_with_coaches",
+    "cmd_get_coach",
+    "cmd_update_coach",
+    "cmd_list_coaches",
+    "cmd_set_team_coaches",
     "cmd_reset_database",
     "cmd_save_relay_types",
     "cmd_update_competition",

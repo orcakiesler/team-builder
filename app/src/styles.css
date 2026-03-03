@@ -278,6 +278,24 @@ body {
   flex: 1;
   min-width: 0;
 }
+.admin-team-coaches-list { margin-top: 0.5rem; }
+.admin-team-coach-row {
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.admin-team-coach-row:last-child { border-bottom: none; }
+.admin-team-coach-team-name {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+.admin-team-coach-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+.admin-team-coach-checkboxes .checkbox-label { font-weight: normal; }
 .admin-team-actions {
   display: flex;
   gap: 0.35rem;
@@ -768,6 +786,7 @@ body {
 }
 .form-group .required { color: #ef4444; }
 .form-group input[type="text"],
+.form-group input[type="email"],
 .form-group input[type="date"],
 .form-group input[type="number"],
 .form-group select {
@@ -805,6 +824,7 @@ body {
   margin-bottom: 0.25rem;
 }
 .form-group input[type="text"],
+.form-group input[type="email"],
 .form-group input[type="number"] {
   width: 100%;
   padding: 0.5rem 0.75rem;
@@ -938,6 +958,11 @@ body {
 .swimmer-profile-section {
   padding: 1rem 2rem 2rem;
 }
+.coach-profile-section { margin-bottom: 1rem; }
+.coach-profile-section .panel h2 { margin-top: 0; }
+.coach-profile-card dl { margin: 0; }
+.coach-profile-card dt { font-weight: 600; color: var(--text-muted); font-size: 0.85em; margin-top: 0.5rem; }
+.coach-profile-card dd { margin: 0.15rem 0 0 0; }
 .swimmer-profile-section .panel h2 {
   margin: 0;
   padding: 1rem 1.25rem;
@@ -964,3 +989,77 @@ body {
 .swimmer-profile-card dd:last-child {
   margin-bottom: 0;
 }
+.best-times-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem 1.5rem;
+  margin-top: 0.25rem;
+}
+.best-time-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.best-time-label { color: var(--text-muted); font-size: 0.85em; }
+.best-time-value { font-weight: 500; }
+.profile-meet-selector { margin-bottom: 0.5rem; }
+.profile-meet-selector label { display: block; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.25rem; }
+.profile-meet-selector select {
+  width: 100%;
+  max-width: 280px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+.availability-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.35rem 1rem;
+  margin-top: 0.5rem;
+}
+.availability-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.availability-label { color: var(--text); }
+.availability-badge {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.availability-yes { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+.availability-no { background: rgba(148, 163, 184, 0.2); color: var(--text-muted); }
+.best-times-grid-edit {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem 1rem;
+  margin-top: 0.35rem;
+}
+.best-times-grid-edit .best-time-field label {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-bottom: 0.2rem;
+}
+.best-times-grid-edit .best-time-field input { width: 100%; }
+.modal-body .availability-checkboxes-inner {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.4rem 1rem;
+  margin-top: 0.5rem;
+}
+.availability-check-item .avail-label { font-weight: normal; }

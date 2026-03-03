@@ -13,6 +13,7 @@
       <p class="subtitle">Build your best relay teams, for any meet, event, or age group</p>
     </div>
     <div class="header-actions">
+      <button type="button" class="btn btn-secondary btn-sm hidden" id="coach-my-profile-btn" title="View or edit your profile">My profile</button>
       <button type="button" class="btn btn-secondary btn-sm" id="logout-btn" title="Sign out">Logout</button>
     </div>
   </header>
@@ -100,6 +101,52 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" id="edit-cancel-btn">Cancel</button>
         <button type="button" class="btn btn-primary" id="edit-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="coach-profile-modal-overlay">
+    <div class="modal" id="coach-profile-modal">
+      <div class="modal-header">
+        <h3>My profile</h3>
+        <button type="button" class="modal-close" id="coach-profile-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="coach-profile-content">
+          <p class="text-muted">Loading…</p>
+        </div>
+        <div class="coach-profile-actions" style="padding-top: 1rem;">
+          <button type="button" class="btn btn-primary" id="coach-profile-edit-btn">Edit my profile</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="coach-edit-modal-overlay">
+    <div class="modal" id="coach-edit-modal">
+      <div class="modal-header">
+        <h3>Edit my profile</h3>
+        <button type="button" class="modal-close" id="coach-edit-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="coach-edit-form">
+          <div class="form-group">
+            <label for="coach-edit-name">Name</label>
+            <input type="text" id="coach-edit-name" placeholder="Your name" />
+          </div>
+          <div class="form-group">
+            <label for="coach-edit-birth-year">Birth year</label>
+            <input type="number" id="coach-edit-birth-year" min="1900" max="2030" placeholder="e.g. 1985" />
+          </div>
+          <div class="form-group">
+            <label for="coach-edit-email">Email</label>
+            <input type="email" id="coach-edit-email" placeholder="you@example.com" required />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="coach-edit-cancel-btn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="coach-edit-save-btn">Save</button>
       </div>
     </div>
   </div>

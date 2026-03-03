@@ -11,7 +11,7 @@ from .config import get_settings
 from .database import Base, engine, get_db
 from .dependencies import get_current_admin_user, get_current_user
 from .models import InviteCode, User
-from .schemas import InviteCodeCreate, InviteCodeRead, LinkSwimmerRequest, Token, UserCreate, UserRead, UserUpdateRole
+from .schemas import InviteCodeCreate, InviteCodeRead, LinkSwimmerRequest, Token, UserCreate, UserRead, UserUpdateMe, UserUpdateRole
 from .security import create_access_token, hash_password, verify_password
 
 
@@ -111,6 +111,27 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
 @app.get("/auth/me", response_model=UserRead)
 def read_current_user(current_user: User = Depends(get_current_user)) -> UserRead:
+    return UserRead.model_validate(current_user)
+
+
+@app.patch("/auth/me", response_model=UserRead)
+def update_current_user(
+    payload: UserUpdateMe,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserRead:
+    """Update own profile (e.g. email)."""
+    if payload.email is not None:
+        new_email = (payload.email or "").strip()
+        if not new_email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email cannot be empty")
+        existing = db.scalar(select(User).where(User.email == new_email))
+        if existing is not None and existing.id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use")
+        current_user.email = new_email
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
     return UserRead.model_validate(current_user)
 
 

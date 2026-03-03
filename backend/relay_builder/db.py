@@ -23,6 +23,7 @@ def ensure_database(db_path: str | Path) -> None:
     _migrate_competition_teams(db_path)
     _migrate_swimmers_team_masters_test(db_path)
     _migrate_settings_table(db_path)
+    _migrate_coaches_and_team_coaches(db_path)
 
 
 def _migrate_swimmers_medical(db_path: str | Path) -> None:
@@ -208,6 +209,34 @@ def _migrate_settings_table(db_path: str | Path) -> None:
                 "INSERT INTO settings (key, value) VALUES (?, ?)",
                 ("relay_types", json.dumps(DEFAULT_RELAY_TYPES, ensure_ascii=False)),
             )
+        conn.commit()
+
+
+def _migrate_coaches_and_team_coaches(db_path: str | Path) -> None:
+    """Create coaches and team_coaches tables if they do not exist."""
+    path = Path(db_path)
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS coaches (
+                email TEXT PRIMARY KEY,
+                name TEXT,
+                birth_year INTEGER
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS team_coaches (
+                team_name TEXT NOT NULL,
+                coach_email TEXT NOT NULL,
+                PRIMARY KEY (team_name, coach_email)
+            )
+            """
+        )
         conn.commit()
 
 
@@ -601,6 +630,148 @@ def delete_team(db_path: str | Path, name: str) -> None:
             raise ValueError(f"Cannot delete team \"{name}\": some swimmers are still assigned to it. Reassign them first.")
         cur.execute("DELETE FROM teams WHERE name = ?", (name,))
         conn.commit()
+
+
+def load_coaches(db_path: str | Path) -> List[Dict[str, Any]]:
+    """Return all coaches as list of dicts with email, name, birth_year."""
+    path = Path(db_path)
+    if not path.exists():
+        return []
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT email, name, birth_year FROM coaches ORDER BY email")
+        return [
+            {"email": row[0], "name": row[1] or "", "birth_year": row[2]}
+            for row in cur.fetchall()
+        ]
+
+
+def get_coach_by_email(db_path: str | Path, email: str) -> Dict[str, Any] | None:
+    """Return coach dict or None. Creates a row with empty name/birth_year if missing."""
+    path = Path(db_path)
+    email = (email or "").strip()
+    if not email:
+        return None
+    ensure_database(path)
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT email, name, birth_year FROM coaches WHERE email = ?", (email,))
+        row = cur.fetchone()
+        if row:
+            return {"email": row[0], "name": row[1] or "", "birth_year": row[2]}
+        cur.execute(
+            "INSERT INTO coaches (email, name, birth_year) VALUES (?, ?, ?)",
+            (email, None, None),
+        )
+        conn.commit()
+        return {"email": email, "name": "", "birth_year": None}
+
+
+def upsert_coach(
+    db_path: str | Path,
+    email: str,
+    *,
+    name: str | None = None,
+    birth_year: int | None = None,
+) -> None:
+    """Insert or update coach by email. None values leave existing fields unchanged unless explicitly set."""
+    path = Path(db_path)
+    email = (email or "").strip()
+    if not email:
+        raise ValueError("Coach email is required")
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT email FROM coaches WHERE email = ?", (email,))
+        if cur.fetchone() is None:
+            cur.execute(
+                "INSERT INTO coaches (email, name, birth_year) VALUES (?, ?, ?)",
+                (email, name, birth_year),
+            )
+        else:
+            updates = []
+            args = []
+            if name is not None:
+                updates.append("name = ?")
+                args.append(name)
+            if birth_year is not None:
+                updates.append("birth_year = ?")
+                args.append(birth_year)
+            if updates:
+                args.append(email)
+                cur.execute(f"UPDATE coaches SET {', '.join(updates)} WHERE email = ?", args)
+        conn.commit()
+
+
+def load_team_coaches(db_path: str | Path, team_name: str) -> List[str]:
+    """Return list of coach emails for the given team."""
+    path = Path(db_path)
+    team_name = (team_name or "").strip()
+    if not path.exists() or not team_name:
+        return []
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT coach_email FROM team_coaches WHERE team_name = ? ORDER BY coach_email",
+            (team_name,),
+        )
+        return [row[0] for row in cur.fetchall()]
+
+
+def set_team_coaches(db_path: str | Path, team_name: str, coach_emails: List[str]) -> None:
+    """Set the list of coach emails for a team (replaces existing)."""
+    path = Path(db_path)
+    team_name = (team_name or "").strip()
+    if not team_name:
+        raise ValueError("Team name is required")
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM team_coaches WHERE team_name = ?", (team_name,))
+        for email in coach_emails or []:
+            e = (email or "").strip()
+            if e:
+                cur.execute(
+                    "INSERT OR IGNORE INTO team_coaches (team_name, coach_email) VALUES (?, ?)",
+                    (team_name, e),
+                )
+        conn.commit()
+
+
+def delete_coach(db_path: str | Path, email: str) -> None:
+    """Remove coach and their team assignments."""
+    path = Path(db_path)
+    email = (email or "").strip()
+    if not email:
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM team_coaches WHERE coach_email = ?", (email,))
+        cur.execute("DELETE FROM coaches WHERE email = ?", (email,))
+        conn.commit()
+
+
+def replace_team_coach_email(db_path: str | Path, old_email: str, new_email: str) -> None:
+    """Update team_coaches: replace old_email with new_email."""
+    path = Path(db_path)
+    old_email = (old_email or "").strip()
+    new_email = (new_email or "").strip()
+    if not old_email or not new_email or old_email == new_email:
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("UPDATE team_coaches SET coach_email = ? WHERE coach_email = ?", (new_email, old_email))
+        conn.commit()
+
+
+def load_teams_with_coaches(db_path: str | Path) -> List[Dict[str, Any]]:
+    """Return list of { team_name, coaches: [email, ...] } for all teams."""
+    path = Path(db_path)
+    teams = load_teams(path)
+    if not teams:
+        return []
+    return [
+        {"team_name": t, "coaches": load_team_coaches(path, t)}
+        for t in teams
+    ]
 
 
 def load_competition_teams(db_path: str | Path, competition_id: int) -> List[str]:

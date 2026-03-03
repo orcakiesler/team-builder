@@ -28,6 +28,7 @@
     if (!isAdminPanelOpen()) return;
     await refreshMeetsList();
     await refreshTeamsList();
+    await refreshTeamCoachesList();
     await refreshAdminUsersList();
   }
 
@@ -192,6 +193,62 @@
       });
     } catch (err) {
       adminTeamsList.innerHTML = '<li class="text-muted">Failed to load teams.</li>';
+    }
+  }
+
+  const adminTeamCoachesList = document.getElementById('admin-team-coaches-list');
+  async function refreshTeamCoachesList() {
+    if (!adminTeamCoachesList) return;
+    try {
+      await api.ensureDbPath();
+      const [teamsWithCoachesData, coachesData] = await Promise.all([
+        window.electronAPI.runBackend({ command: 'list-teams-with-coaches', dbPath: state.dbPath }),
+        window.electronAPI.runBackend({ command: 'list-coaches', dbPath: state.dbPath }),
+      ]);
+      const teamsWithCoaches = teamsWithCoachesData.teams_with_coaches || [];
+      const coaches = coachesData.coaches || [];
+      if (teamsWithCoaches.length === 0) {
+        adminTeamCoachesList.innerHTML = '<p class="text-muted">No teams. Add a team in the Teams section first.</p>';
+        return;
+      }
+      adminTeamCoachesList.innerHTML = teamsWithCoaches
+        .map(
+          (t) => {
+            const teamName = t.team_name || '';
+            const assigned = t.coaches || [];
+            const checkboxes = coaches
+              .map(
+                (c) => {
+                  const email = c.email || '';
+                  const label = (c.name && c.name.trim()) ? utils.escapeHtml(c.name) + ' (' + utils.escapeHtml(email) + ')' : utils.escapeHtml(email);
+                  const checked = assigned.indexOf(email) !== -1 ? ' checked' : '';
+                  return `<label class="checkbox-label admin-team-coach-cb"><input type="checkbox" data-team="${utils.escapeHtml(teamName)}" data-email="${utils.escapeHtml(email)}"${checked} /> ${label}</label>`;
+                }
+              )
+              .join('');
+            return `<div class="admin-team-coach-row"><span class="admin-team-coach-team-name">${utils.escapeHtml(teamName)}</span><div class="admin-team-coach-checkboxes">${checkboxes || '<span class="text-muted">No coaches in app yet.</span>'}</div></div>`;
+          }
+        )
+        .join('');
+      adminTeamCoachesList.querySelectorAll('.admin-team-coach-cb input').forEach((cb) => {
+        cb.addEventListener('change', async () => {
+          const teamName = cb.getAttribute('data-team');
+          if (!teamName) return;
+          const row = cb.closest('.admin-team-coach-row');
+          const selected = Array.from(row.querySelectorAll('.admin-team-coach-cb input:checked')).map((el) => el.getAttribute('data-email')).filter(Boolean);
+          try {
+            await window.electronAPI.runBackend({
+              command: 'set-team-coaches',
+              dbPath: state.dbPath,
+              payload: { team_name: teamName, coach_emails: selected },
+            });
+          } catch (err) {
+            alert('Failed to save: ' + (err.message || String(err)));
+          }
+        });
+      });
+    } catch (err) {
+      adminTeamCoachesList.innerHTML = '<p class="text-muted">Failed to load team coaches.</p>';
     }
   }
 

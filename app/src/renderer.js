@@ -31,16 +31,28 @@
   const swimmerProfileSection = document.getElementById('swimmer-profile-section');
   const swimmerProfileContent = document.getElementById('swimmer-profile-content');
   const swimmerProfileEditBtn = document.getElementById('swimmer-profile-edit-btn');
+  const coachProfileSection = document.getElementById('coach-profile-section');
+  const coachProfileContent = document.getElementById('coach-profile-content');
+  const coachProfileEditBtn = document.getElementById('coach-profile-edit-btn');
+  const coachMyProfileBtn = document.getElementById('coach-my-profile-btn');
+  const coachProfileModalOverlay = document.getElementById('coach-profile-modal-overlay');
+  const coachProfileModalClose = document.getElementById('coach-profile-modal-close');
+
+  const topBarActions = document.querySelector('.top-bar-actions');
 
   function applyRoleVisibility(user) {
     const role = user && user.role ? user.role : 'coach';
     const isAdmin = role === 'admin';
     const isSwimmer = role === 'swimmer';
+    const isCoach = role === 'coach';
     if (openAdminBtn) openAdminBtn.style.display = isAdmin ? '' : 'none';
-    if (topBar) topBar.style.display = isSwimmer ? 'none' : '';
+    if (topBar) topBar.style.display = '';
+    if (topBarActions) topBarActions.style.display = isSwimmer ? 'none' : '';
     if (meetTeamsBar) meetTeamsBar.style.display = isSwimmer ? 'none' : '';
     if (resultsSection) resultsSection.style.display = isSwimmer ? 'none' : '';
     if (swimmerProfileSection) swimmerProfileSection.classList.toggle('hidden', !isSwimmer);
+    if (coachProfileSection) coachProfileSection.classList.add('hidden');
+    if (coachMyProfileBtn) coachMyProfileBtn.classList.toggle('hidden', !isCoach);
   }
 
   function _normEmail(e) {
@@ -52,7 +64,11 @@
     let sid = state.currentUser.swimmer_id;
     try {
       await api.ensureDbPath();
-      const data = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath: state.dbPath });
+      const data = await window.electronAPI.runBackend({
+        command: 'list-swimmers',
+        dbPath: state.dbPath,
+        competitionId: state.selectedMeetId ?? undefined,
+      });
       const swimmers = data.swimmers || [];
       let me = sid != null ? swimmers.find(function (s) { return s.id === sid; }) : null;
       if (!me && state.currentUser.email) {
@@ -73,27 +89,128 @@
         if (swimmerProfileEditBtn) swimmerProfileEditBtn.style.display = 'none';
         return;
       }
+      state.currentUser.swimmer_id = sid;
       state.currentSwimmers = [me];
       const utils = window.RelayApp.utils;
       const esc = utils && utils.escapeHtml ? utils.escapeHtml : function (s) { return (s == null ? '' : String(s)); };
+      const fmtTime = utils && utils.formatTime ? utils.formatTime : function (v) { return v == null ? '–' : String(v); };
+      const comps = state.currentCompetitions || [];
+      if (comps.length && (state.selectedMeetId == null || !comps.some(function (c) { return c.id === state.selectedMeetId; }))) {
+        state.selectedMeetId = comps[0].id;
+        await loadMyProfile();
+        return;
+      }
+      const selectedMeetId = state.selectedMeetId;
+      const avail = me.availability || {};
+      const availKeys = window.RelayApp.AVAILABILITY_KEYS || [];
+      const bestTimesHtml = '<div class="best-times-grid">' +
+        '<div class="best-time-item"><span class="best-time-label">50 Free</span><span class="best-time-value">' + fmtTime(me.freestyle_50) + '</span></div>' +
+        '<div class="best-time-item"><span class="best-time-label">50 Back</span><span class="best-time-value">' + fmtTime(me.backstroke_50) + '</span></div>' +
+        '<div class="best-time-item"><span class="best-time-label">50 Breast</span><span class="best-time-value">' + fmtTime(me.breaststroke_50) + '</span></div>' +
+        '<div class="best-time-item"><span class="best-time-label">50 Fly</span><span class="best-time-value">' + fmtTime(me.butterfly_50) + '</span></div>' +
+        '</div>';
+      const availItemsHtml = availKeys.length
+        ? availKeys.map(function (k) {
+            const label = k.replace(/_/g, ' ');
+            const yes = avail[k];
+            return '<div class="availability-item"><span class="availability-label">' + esc(label) + '</span><span class="availability-badge ' + (yes ? 'availability-yes' : 'availability-no') + '">' + (yes ? 'Yes' : 'No') + '</span></div>';
+          }).join('')
+        : '<p class="text-muted">No relay types defined.</p>';
+      const meetDropdownHtml = comps.length
+        ? '<div class="profile-meet-selector"><label for="profile-availability-meet">Availability for</label><select id="profile-availability-meet">' +
+          comps.map(function (c) { return '<option value="' + c.id + '"' + (c.id === selectedMeetId ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') +
+          '</select></div>'
+        : '<p class="text-muted">No meets yet. Ask your coach to add a meet.</p>';
       swimmerProfileContent.innerHTML =
         '<div class="swimmer-profile-card">' +
-        '<dl><dt>Name</dt><dd>' + esc(me.full_name) + '</dd>' +
+        '<dl>' +
+        '<dt>Name</dt><dd>' + esc(me.full_name) + '</dd>' +
         '<dt>Birth year</dt><dd>' + esc(me.year_of_birth) + '</dd>' +
-        '<dt>Gender</dt><dd>' + (me.gender === 'm' ? 'Male' : me.gender === 'f' ? 'Female' : '—') + '</dd>' +
+        '<dt>Email</dt><dd>' + esc(me.email || '–') + '</dd>' +
+        '<dt>Gender</dt><dd>' + (me.gender === 'm' ? 'Male' : me.gender === 'f' ? 'Female' : '–') + '</dd>' +
         '<dt>Team</dt><dd>' + esc(me.team) + '</dd>' +
         (me.medical_date ? '<dt>Medical date</dt><dd>' + esc(me.medical_date) + '</dd>' : '') +
+        '<dt>Best times (50m)</dt><dd>' + bestTimesHtml + '</dd>' +
+        '<dt>Availability</dt><dd>' + meetDropdownHtml + '<div class="availability-grid">' + availItemsHtml + '</div></dd>' +
         '</dl></div>';
+      if (comps.length && document.getElementById('profile-availability-meet')) {
+        document.getElementById('profile-availability-meet').addEventListener('change', function () {
+          const id = this.value ? parseInt(this.value, 10) : null;
+          if (id != null) state.selectedMeetId = id;
+          loadMyProfile();
+        });
+      }
       if (swimmerProfileEditBtn) {
         swimmerProfileEditBtn.style.display = '';
         swimmerProfileEditBtn.onclick = function () {
-          if (modals && modals.openEditModal) modals.openEditModal(me);
+          if (modals && modals.openEditModal) modals.openEditModal(me, true);
         };
       }
     } catch (err) {
       swimmerProfileContent.innerHTML = '<p class="text-muted">Could not load profile: ' + (err.message || String(err)) + '</p>';
       if (swimmerProfileEditBtn) swimmerProfileEditBtn.style.display = 'none';
     }
+  }
+
+  async function loadCoachProfile() {
+    if (!state.currentUser || state.currentUser.role !== 'coach' || !coachProfileContent) return;
+    const email = (state.currentUser.email || '').trim();
+    if (!email) {
+      coachProfileContent.innerHTML = '<p class="text-muted">Your account has no email set. Contact an admin or sign out and sign in again.</p>';
+      if (coachProfileEditBtn) {
+        coachProfileEditBtn.style.display = 'none';
+      }
+      return;
+    }
+    try {
+      await api.ensureDbPath();
+      const data = await window.electronAPI.runBackend({
+        command: 'get-coach',
+        dbPath: state.dbPath,
+        payload: { email: email },
+      });
+      const coach = data.error ? null : (data.coach || null);
+      var stubCoach = { email: email, name: '', birth_year: null };
+      if (coachProfileEditBtn) {
+        coachProfileEditBtn.style.display = '';
+        coachProfileEditBtn.onclick = function () {
+          if (window.RelayApp.coachProfile && window.RelayApp.coachProfile.openEditModal) {
+            window.RelayApp.coachProfile.openEditModal(coach || stubCoach);
+          }
+        };
+      }
+      if (data.error || !coach) {
+        coachProfileContent.innerHTML = '<p class="text-muted">' + (data.error || 'Could not load profile.') + '</p><p class="text-muted">You can still click Edit to set your name and birth year.</p>';
+        return;
+      }
+      const utils = window.RelayApp.utils;
+      const esc = utils && utils.escapeHtml ? utils.escapeHtml : function (s) { return (s == null ? '' : String(s)); };
+      coachProfileContent.innerHTML =
+        '<div class="coach-profile-card">' +
+        '<dl><dt>Name</dt><dd>' + esc(coach.name || '–') + '</dd>' +
+        '<dt>Birth year</dt><dd>' + esc(coach.birth_year != null ? coach.birth_year : '–') + '</dd>' +
+        '<dt>Email</dt><dd>' + esc(coach.email || '–') + '</dd></dl></div>';
+    } catch (err) {
+      coachProfileContent.innerHTML = '<p class="text-muted">Could not load profile: ' + (err.message || String(err)) + '</p><p class="text-muted">You can still click Edit to set your name and birth year.</p>';
+      var stubCoach = { email: (state.currentUser && state.currentUser.email) || '', name: '', birth_year: null };
+      if (coachProfileEditBtn) {
+        coachProfileEditBtn.style.display = '';
+        coachProfileEditBtn.onclick = function () {
+          if (window.RelayApp.coachProfile && window.RelayApp.coachProfile.openEditModal) {
+            window.RelayApp.coachProfile.openEditModal(stubCoach);
+          }
+        };
+      }
+    }
+  }
+
+  function openCoachProfileModal() {
+    if (coachProfileModalOverlay) coachProfileModalOverlay.classList.remove('hidden');
+    loadCoachProfile();
+  }
+
+  function closeCoachProfileModal() {
+    if (coachProfileModalOverlay) coachProfileModalOverlay.classList.add('hidden');
   }
 
   if (runBtn) {
@@ -136,6 +253,18 @@
 
   if (openAdminBtn && window.RelayApp.admin && window.RelayApp.admin.openAdminPanel) {
     openAdminBtn.addEventListener('click', () => window.RelayApp.admin.openAdminPanel());
+  }
+
+  if (coachMyProfileBtn) {
+    coachMyProfileBtn.addEventListener('click', openCoachProfileModal);
+  }
+  if (coachProfileModalClose) {
+    coachProfileModalClose.addEventListener('click', closeCoachProfileModal);
+  }
+  if (coachProfileModalOverlay) {
+    coachProfileModalOverlay.addEventListener('click', function (e) {
+      if (e.target === coachProfileModalOverlay) closeCoachProfileModal();
+    });
   }
 
   if (logoutBtn && window.RelayApp.clearAuthToken) {
@@ -199,6 +328,9 @@
     });
   }
 
+  window.RelayApp.loadCoachProfile = loadCoachProfile;
+  window.RelayApp.loadMyProfile = loadMyProfile;
+
   (async function init() {
     api.setLoading('Loading…');
     const swimmersList = document.getElementById('swimmers-list');
@@ -213,6 +345,24 @@
       applyRoleVisibility(state.currentUser);
 
       if (state.currentUser && state.currentUser.role === 'swimmer') {
+        await api.ensureDbPath();
+        try {
+          const teamsData = await window.electronAPI.runBackend({ command: 'list-teams', dbPath: state.dbPath });
+          window.RelayApp.TEAMS = Array.isArray(teamsData.teams) ? teamsData.teams : ['Haifa - masters'];
+        } catch (_) {
+          window.RelayApp.TEAMS = ['Haifa - masters'];
+        }
+        try {
+          const relayData = await window.electronAPI.runBackend({ command: 'list-relay-types', dbPath: state.dbPath });
+          window.RelayApp.AVAILABILITY_KEYS = Array.isArray(relayData.relay_types) ? relayData.relay_types : ['freestyle', 'medley', 'freestyle_mix', 'medley_mix'];
+        } catch (_) {
+          window.RelayApp.AVAILABILITY_KEYS = ['freestyle', 'medley', 'freestyle_mix', 'medley_mix'];
+        }
+        api.setLoading('Loading meets…');
+        await api.loadCompetitions();
+        if (window.RelayApp.meetSelector && window.RelayApp.meetSelector.restoreLastMeetAndTeams) {
+          await window.RelayApp.meetSelector.restoreLastMeetAndTeams();
+        }
         await loadMyProfile();
         api.clearLoading();
         return;
@@ -230,6 +380,9 @@
         window.RelayApp.AVAILABILITY_KEYS = Array.isArray(relayData.relay_types) ? relayData.relay_types : ['freestyle', 'medley', 'freestyle_mix', 'medley_mix'];
       } catch (_) {
         window.RelayApp.AVAILABILITY_KEYS = ['freestyle', 'medley', 'freestyle_mix', 'medley_mix'];
+      }
+      if (state.currentUser && state.currentUser.role === 'coach') {
+        await loadCoachProfile();
       }
       api.setLoading('Loading meets…');
       await api.loadCompetitions();

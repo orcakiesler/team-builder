@@ -44,6 +44,11 @@
   const addSwimmerStep1 = document.getElementById('add-swimmer-step1');
   const addSwimmerStep2 = document.getElementById('add-swimmer-step2');
   const addSwimmerAvailability = document.getElementById('add-swimmer-availability');
+  const coachEditModalOverlay = document.getElementById('coach-edit-modal-overlay');
+  const coachEditModalClose = document.getElementById('coach-edit-modal-close');
+  const coachEditForm = document.getElementById('coach-edit-form');
+  const coachEditCancelBtn = document.getElementById('coach-edit-cancel-btn');
+  const coachEditSaveBtn = document.getElementById('coach-edit-save-btn');
 
   let swimmerBeingEdited = null;
 
@@ -95,8 +100,12 @@
     const availKeys = window.RelayApp.AVAILABILITY_KEYS || AVAILABILITY_KEYS || [];
     const availCheckboxes = availKeys.map(
       (k) =>
-        `<label class="checkbox-label"><input type="checkbox" name="avail-${k}" data-key="${utils.escapeHtml(k)}" /> ${utils.escapeHtml(k.replace('_', ' '))}</label>`
+        `<label class="checkbox-label availability-check-item"><input type="checkbox" name="avail-${k}" data-key="${utils.escapeHtml(k)}" /> <span class="avail-label">${utils.escapeHtml(k.replace('_', ' '))}</span></label>`
     ).join('');
+    const comps = state.currentCompetitions || [];
+    const meetOptions = comps.length
+      ? '<option value="">— Select a meet —</option>' + comps.map((c) => `<option value="${c.id}">${utils.escapeHtml(c.name)}</option>`).join('')
+      : '<option value="">No meets yet</option>';
     return `
       <div class="form-group">
         <label for="edit-first-name">First name <span class="required">*</span></label>
@@ -129,21 +138,24 @@
         <label for="edit-medical-date">Medical date</label>
         <input type="date" id="edit-medical-date" />
       </div>
-      <div class="form-group times-row">
+      <div class="form-group times-row best-times-edit-row">
         <label>Best times (50m, seconds)</label>
-        <input type="number" id="edit-freestyle" step="0.01" min="0" placeholder="50 Free" />
-        <input type="number" id="edit-backstroke" step="0.01" min="0" placeholder="50 Back" />
-        <input type="number" id="edit-breaststroke" step="0.01" min="0" placeholder="50 Breast" />
-        <input type="number" id="edit-butterfly" step="0.01" min="0" placeholder="50 Fly" />
+        <div class="best-times-grid-edit">
+          <div class="best-time-field"><label for="edit-freestyle">50 Free</label><input type="number" id="edit-freestyle" step="0.01" min="0" placeholder="—" /></div>
+          <div class="best-time-field"><label for="edit-backstroke">50 Back</label><input type="number" id="edit-backstroke" step="0.01" min="0" placeholder="—" /></div>
+          <div class="best-time-field"><label for="edit-breaststroke">50 Breast</label><input type="number" id="edit-breaststroke" step="0.01" min="0" placeholder="—" /></div>
+          <div class="best-time-field"><label for="edit-butterfly">50 Fly</label><input type="number" id="edit-butterfly" step="0.01" min="0" placeholder="—" /></div>
+        </div>
       </div>
       <div class="form-group availability-checkboxes" id="edit-availability-section">
-        <label>Availability <span class="availability-meet-hint text-muted"></span></label>
-        <div class="availability-checkboxes-inner">${availCheckboxes}</div>
+        <label for="edit-availability-meet">Availability for meet</label>
+        <select id="edit-availability-meet">${meetOptions}</select>
+        <div class="availability-checkboxes-inner" id="edit-availability-checkboxes">${availCheckboxes}</div>
       </div>
     `;
   }
 
-  function openEditModal(swimmer) {
+  function openEditModal(swimmer, isSwimmerEditingSelf) {
     if (!swimmer || !swimmer.id) return;
     swimmerBeingEdited = swimmer;
     editSwimmerForm.innerHTML = buildEditFormHTML();
@@ -157,6 +169,16 @@
     if (editTeam) {
       const teamVal = (swimmer.team || '').trim();
       editTeam.value = teamVal && window.RelayApp.TEAMS && window.RelayApp.TEAMS.includes(teamVal) ? teamVal : (window.RelayApp.TEAMS && window.RelayApp.TEAMS[0]) || '';
+      if (isSwimmerEditingSelf) {
+        editTeam.disabled = true;
+        const teamWrap = editTeam.closest('.form-group');
+        if (teamWrap) {
+          const hint = document.createElement('p');
+          hint.className = 'text-muted form-hint';
+          hint.textContent = 'Team can only be changed by your coach or admin.';
+          teamWrap.appendChild(hint);
+        }
+      }
     }
     const medDate = swimmer.medical_date && String(swimmer.medical_date).trim() ? String(swimmer.medical_date).slice(0, 10) : '';
     document.getElementById('edit-medical-date').value = medDate;
@@ -165,19 +187,41 @@
     document.getElementById('edit-breaststroke').value = swimmer.breaststroke_50 != null ? swimmer.breaststroke_50 : '';
     document.getElementById('edit-butterfly').value = swimmer.butterfly_50 != null ? swimmer.butterfly_50 : '';
     const availSection = editSwimmerForm.querySelector('#edit-availability-section');
-    const hintSpan = editSwimmerForm.querySelector('.availability-meet-hint');
-    if (state.selectedMeetId != null) {
-      if (availSection) availSection.classList.remove('hidden');
-      if (hintSpan) hintSpan.textContent = '(for current meet only)';
-      const avail = swimmer.availability || {};
-      (window.RelayApp.AVAILABILITY_KEYS || AVAILABILITY_KEYS || []).forEach((k) => {
-        const cb = editSwimmerForm.querySelector(`input[name="avail-${k}"]`);
-        if (cb) { cb.checked = !!avail[k]; cb.disabled = false; }
+    const availMeetSelect = editSwimmerForm.querySelector('#edit-availability-meet');
+    const comps = state.currentCompetitions || [];
+    const defaultMeetId = state.selectedMeetId != null && comps.some((c) => c.id === state.selectedMeetId)
+      ? state.selectedMeetId
+      : (comps.length ? comps[0].id : null);
+    if (availMeetSelect) {
+      availMeetSelect.value = defaultMeetId != null ? String(defaultMeetId) : '';
+      availMeetSelect.addEventListener('change', async function () {
+        const meetId = availMeetSelect.value ? parseInt(availMeetSelect.value, 10) : null;
+        if (!meetId || !swimmerBeingEdited) return;
+        try {
+          await api.ensureDbPath();
+          const data = await window.electronAPI.runBackend({
+            command: 'list-swimmers',
+            dbPath: state.dbPath,
+            competitionId: meetId,
+          });
+          const swimmers = data.swimmers || [];
+          const s = swimmers.find(function (x) { return x.id === swimmerBeingEdited.id; });
+          const avail = (s && s.availability) || {};
+          (window.RelayApp.AVAILABILITY_KEYS || AVAILABILITY_KEYS || []).forEach(function (k) {
+            const cb = editSwimmerForm.querySelector('input[name="avail-' + k + '"]');
+            if (cb) { cb.checked = !!avail[k]; }
+          });
+        } catch (_) {}
       });
-    } else {
-      if (availSection) availSection.classList.add('hidden');
-      if (hintSpan) hintSpan.textContent = '';
-      editSwimmerForm.querySelectorAll('input[name^="avail-"]').forEach((cb) => { cb.disabled = true; });
+    }
+    if (availSection) availSection.classList.remove('hidden');
+    const avail = swimmer.availability || {};
+    (window.RelayApp.AVAILABILITY_KEYS || AVAILABILITY_KEYS || []).forEach((k) => {
+      const cb = editSwimmerForm.querySelector('input[name="avail-' + k + '"]');
+      if (cb) { cb.checked = !!avail[k]; cb.disabled = false; }
+    });
+    if (defaultMeetId != null && !swimmer.availability && comps.length) {
+      availMeetSelect.dispatchEvent(new Event('change'));
     }
     modalOverlay.classList.add('hidden');
     editModalOverlay.classList.remove('hidden');
@@ -194,7 +238,10 @@
     const gender = document.getElementById('edit-gender').value;
     const year_of_birth = document.getElementById('edit-year-of-birth').value.trim();
     const teamEl = document.getElementById('edit-team');
-    const team = teamEl ? teamEl.value.trim() : '';
+    const teamDisabled = teamEl && teamEl.disabled;
+    const team = teamDisabled && swimmerBeingEdited
+      ? (swimmerBeingEdited.team || '').trim()
+      : (teamEl ? teamEl.value.trim() : '');
     const medical_date = document.getElementById('edit-medical-date').value.trim() || null;
     const freestyle_50 = document.getElementById('edit-freestyle').value.trim();
     const backstroke_50 = document.getElementById('edit-backstroke').value.trim();
@@ -216,14 +263,17 @@
       breaststroke_50: breaststroke_50 === '' ? null : parseFloat(breaststroke_50),
       butterfly_50: butterfly_50 === '' ? null : parseFloat(butterfly_50),
     };
-    if (state.selectedMeetId != null) {
+    const availMeetEl = document.getElementById('edit-availability-meet');
+    const availabilityMeetId = availMeetEl && availMeetEl.value ? parseInt(availMeetEl.value, 10) : null;
+    if (availabilityMeetId != null && !isNaN(availabilityMeetId)) {
       const availability = {};
       (window.RelayApp.AVAILABILITY_KEYS || AVAILABILITY_KEYS || []).forEach((k) => {
-        const cb = editSwimmerForm.querySelector(`input[name="avail-${k}"]`);
+        const cb = editSwimmerForm.querySelector('input[name="avail-' + k + '"]');
         availability[k] = cb ? cb.checked : false;
       });
       payload.availability = availability;
     }
+    payload._availabilityMeetId = availabilityMeetId;
     return payload;
   }
 
@@ -250,8 +300,11 @@
         return;
       }
       const teamEl = document.getElementById('edit-team');
-      const teamVal = teamEl ? teamEl.value.trim() : '';
-      if (!teamVal || !(window.RelayApp.TEAMS && window.RelayApp.TEAMS.includes(teamVal))) {
+      const teamDisabled = teamEl && teamEl.disabled;
+      const teamVal = teamDisabled && swimmerBeingEdited
+        ? (swimmerBeingEdited.team || '').trim()
+        : (teamEl ? teamEl.value.trim() : '');
+      if (!teamDisabled && (!teamVal || !(window.RelayApp.TEAMS && window.RelayApp.TEAMS.includes(teamVal)))) {
         alert('Please select a team.');
         return;
       }
@@ -264,7 +317,17 @@
       try {
         await api.ensureDbPath();
         const payload = getEditFormPayload();
-        await window.electronAPI.runBackend({ command: 'update-swimmer', dbPath: state.dbPath, payload, competitionId: state.selectedMeetId ?? undefined });
+        const availabilityMeetId = payload._availabilityMeetId;
+        delete payload._availabilityMeetId;
+        const competitionIdForSave = (availabilityMeetId != null && payload.availability)
+          ? availabilityMeetId
+          : (state.selectedMeetId ?? undefined);
+        await window.electronAPI.runBackend({
+          command: 'update-swimmer',
+          dbPath: state.dbPath,
+          payload,
+          competitionId: competitionIdForSave,
+        });
         await api.loadSwimmers();
         closeEditModal();
         swimmerBeingEdited = null;
@@ -827,6 +890,78 @@
     });
   }
 
+  function openCoachEditModal(coach) {
+    if (!coach) return;
+    document.getElementById('coach-edit-name').value = coach.name || '';
+    document.getElementById('coach-edit-birth-year').value = coach.birth_year != null ? coach.birth_year : '';
+    document.getElementById('coach-edit-email').value = coach.email || '';
+    if (coachEditModalOverlay) coachEditModalOverlay.classList.remove('hidden');
+  }
+
+  function closeCoachEditModal() {
+    if (coachEditModalOverlay) coachEditModalOverlay.classList.add('hidden');
+  }
+
+  if (coachEditModalClose) coachEditModalClose.addEventListener('click', closeCoachEditModal);
+  if (coachEditCancelBtn) coachEditCancelBtn.addEventListener('click', closeCoachEditModal);
+  if (coachEditModalOverlay) {
+    coachEditModalOverlay.addEventListener('click', function (e) {
+      if (e.target === coachEditModalOverlay) closeCoachEditModal();
+    });
+  }
+  if (coachEditSaveBtn) {
+    coachEditSaveBtn.addEventListener('click', async function () {
+      const name = (document.getElementById('coach-edit-name') && document.getElementById('coach-edit-name').value || '').trim();
+      const birthYearEl = document.getElementById('coach-edit-birth-year');
+      const birthYearRaw = birthYearEl ? birthYearEl.value.trim() : '';
+      const birthYear = birthYearRaw === '' ? null : parseInt(birthYearRaw, 10);
+      const emailEl = document.getElementById('coach-edit-email');
+      const newEmail = (emailEl && emailEl.value || '').trim();
+      if (!newEmail) {
+        alert('Email is required.');
+        return;
+      }
+      const currentEmail = (state.currentUser && state.currentUser.email || '').trim();
+      api.setLoading('Saving…');
+      try {
+        await api.ensureDbPath();
+        await window.electronAPI.runBackend({
+          command: 'update-coach',
+          dbPath: state.dbPath,
+          payload: { email: currentEmail, name: name || null, birth_year: birthYear, new_email: newEmail },
+        });
+        if (newEmail !== currentEmail) {
+          const token = window.RelayApp.getAuthToken && window.RelayApp.getAuthToken();
+          const authUrl = (window.RelayApp.api && window.RelayApp.api.AUTH_BASE_URL) || window.RELAY_AUTH_BASE_URL || 'http://127.0.0.1:8000';
+          const resp = await fetch(authUrl + '/auth/me', {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + (token || ''),
+            },
+            body: JSON.stringify({ email: newEmail }),
+          });
+          if (resp.ok && state.currentUser) state.currentUser.email = newEmail;
+        }
+        closeCoachEditModal();
+        if (window.RelayApp.coachProfile && window.RelayApp.coachProfile.reload) {
+          window.RelayApp.coachProfile.reload();
+        }
+      } catch (err) {
+        const out = err && err.message ? err.message : String(err);
+        try {
+          const parsed = JSON.parse(out);
+          if (parsed && parsed.error) alert(parsed.error);
+          else alert('Error: ' + out);
+        } catch (_) {
+          alert('Error: ' + out);
+        }
+      } finally {
+        api.clearLoading();
+      }
+    });
+  }
+
   window.RelayApp.modals = {
     openSwimmerModal,
     openEditModal,
@@ -843,5 +978,12 @@
     resetAddSwimmerForm,
     showAddSwimmerStep,
     ensureAddSwimmerAvailabilityCheckboxes,
+  };
+  window.RelayApp.coachProfile = {
+    openEditModal: openCoachEditModal,
+    closeEditModal: closeCoachEditModal,
+    reload: function () {
+      if (window.RelayApp.loadCoachProfile) window.RelayApp.loadCoachProfile();
+    },
   };
 })();

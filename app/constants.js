@@ -19,6 +19,9 @@ const STDIN_COMMANDS = [
   'delete-swimmers-by-team',
   'save-relay-types',
   'reset-database',
+  'get-coach',
+  'update-coach',
+  'set-team-coaches',
 ];
 
 /** Default window size */

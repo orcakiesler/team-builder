@@ -115,6 +115,9 @@
         api.setLoading('Loading meet…');
         try {
           await applyLastTeamsForMeet(state.selectedMeetId);
+          if (state.currentUser && state.currentUser.role === 'swimmer' && window.RelayApp.loadMyProfile) {
+            await window.RelayApp.loadMyProfile();
+          }
         } finally {
           api.clearLoading();
         }

@@ -25,14 +25,19 @@ from commands import (
     cmd_delete_swimmers_by_team,
     cmd_delete_team,
     cmd_duplicate_competition,
+    cmd_get_coach,
     cmd_import_files,
+    cmd_list_coaches,
     cmd_list_competitions,
     cmd_list_relay_types,
     cmd_list_swimmers,
     cmd_list_swimmers_by_team,
     cmd_list_teams,
+    cmd_list_teams_with_coaches,
     cmd_reset_database,
     cmd_save_relay_types,
+    cmd_set_team_coaches,
+    cmd_update_coach,
     cmd_update_competition,
     cmd_update_swimmer,
     run_legacy,
@@ -66,6 +71,11 @@ def main() -> None:
             "list-relay-types",
             "save-relay-types",
             "reset-database",
+            "get-coach",
+            "update-coach",
+            "list-coaches",
+            "list-teams-with-coaches",
+            "set-team-coaches",
         ],
     )
     parser.add_argument("--best-times", default=None)
@@ -142,6 +152,16 @@ def main() -> None:
                 out = cmd_save_relay_types(db_path, json.load(sys.stdin))
             elif args.command == "reset-database":
                 out = cmd_reset_database(db_path, json.load(sys.stdin))
+            elif args.command == "get-coach":
+                out = cmd_get_coach(db_path, json.load(sys.stdin))
+            elif args.command == "update-coach":
+                out = cmd_update_coach(db_path, json.load(sys.stdin))
+            elif args.command == "list-coaches":
+                out = cmd_list_coaches(db_path)
+            elif args.command == "list-teams-with-coaches":
+                out = cmd_list_teams_with_coaches(db_path)
+            elif args.command == "set-team-coaches":
+                out = cmd_set_team_coaches(db_path, json.load(sys.stdin))
             else:
                 raise ValueError(f"Unknown command: {args.command}")
             print(json.dumps(out, ensure_ascii=False))

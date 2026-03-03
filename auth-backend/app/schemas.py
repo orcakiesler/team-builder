@@ -32,6 +32,11 @@ class UserUpdateRole(BaseModel):
     role: Role
 
 
+class UserUpdateMe(BaseModel):
+    """Update own profile (e.g. email)."""
+    email: Optional[EmailStr] = None
+
+
 class LinkSwimmerRequest(BaseModel):
     swimmer_id: Optional[int] = None
 
