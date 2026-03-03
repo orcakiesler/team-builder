@@ -4,6 +4,19 @@
  */
 (function () {
   const state = window.RelayApp.state;
+  const getAuthToken = window.RelayApp.getAuthToken;
+
+  // Simple guard: if not authenticated, send user back to login page.
+  try {
+    const token = getAuthToken && getAuthToken();
+    if (!token) {
+      window.location.href = 'login.html';
+      return;
+    }
+  } catch (_) {
+    window.location.href = 'login.html';
+    return;
+  }
   const api = window.RelayApp.api;
   const modals = window.RelayApp.modals;
   const runBtn = document.getElementById('run-btn');
@@ -12,6 +25,64 @@
   const openAdminBtn = document.getElementById('open-admin-btn');
   const addSwimmerBtn = document.getElementById('add-swimmer-btn');
   const refreshSwimmersBtn = document.getElementById('refresh-swimmers-btn');
+  const logoutBtn = document.getElementById('logout-btn');
+  const topBar = document.querySelector('.top-bar');
+  const meetTeamsBar = document.getElementById('meet-teams-section');
+  const swimmerProfileSection = document.getElementById('swimmer-profile-section');
+  const swimmerProfileContent = document.getElementById('swimmer-profile-content');
+  const swimmerProfileEditBtn = document.getElementById('swimmer-profile-edit-btn');
+
+  function applyRoleVisibility(user) {
+    const role = user && user.role ? user.role : 'coach';
+    const isAdmin = role === 'admin';
+    const isSwimmer = role === 'swimmer';
+    if (openAdminBtn) openAdminBtn.style.display = isAdmin ? '' : 'none';
+    if (topBar) topBar.style.display = isSwimmer ? 'none' : '';
+    if (meetTeamsBar) meetTeamsBar.style.display = isSwimmer ? 'none' : '';
+    if (resultsSection) resultsSection.style.display = isSwimmer ? 'none' : '';
+    if (swimmerProfileSection) swimmerProfileSection.classList.toggle('hidden', !isSwimmer);
+  }
+
+  async function loadMyProfile() {
+    if (!state.currentUser || state.currentUser.role !== 'swimmer' || !swimmerProfileContent) return;
+    const sid = state.currentUser.swimmer_id;
+    if (sid == null) {
+      swimmerProfileContent.innerHTML = '<p class="text-muted">No profile linked. Contact your coach or admin to link your account to a swimmer.</p>';
+      if (swimmerProfileEditBtn) swimmerProfileEditBtn.style.display = 'none';
+      return;
+    }
+    try {
+      await api.ensureDbPath();
+      const data = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath: state.dbPath });
+      const swimmers = data.swimmers || [];
+      const me = swimmers.find(function (s) { return s.id === sid; });
+      if (!me) {
+        swimmerProfileContent.innerHTML = '<p class="text-muted">Profile not found. Contact your coach or admin.</p>';
+        if (swimmerProfileEditBtn) swimmerProfileEditBtn.style.display = 'none';
+        return;
+      }
+      state.currentSwimmers = [me];
+      const utils = window.RelayApp.utils;
+      const esc = utils && utils.escapeHtml ? utils.escapeHtml : function (s) { return (s == null ? '' : String(s)); };
+      swimmerProfileContent.innerHTML =
+        '<div class="swimmer-profile-card">' +
+        '<dl><dt>Name</dt><dd>' + esc(me.full_name) + '</dd>' +
+        '<dt>Birth year</dt><dd>' + esc(me.year_of_birth) + '</dd>' +
+        '<dt>Gender</dt><dd>' + (me.gender === 'm' ? 'Male' : me.gender === 'f' ? 'Female' : '—') + '</dd>' +
+        '<dt>Team</dt><dd>' + esc(me.team) + '</dd>' +
+        (me.medical_date ? '<dt>Medical date</dt><dd>' + esc(me.medical_date) + '</dd>' : '') +
+        '</dl></div>';
+      if (swimmerProfileEditBtn) {
+        swimmerProfileEditBtn.style.display = '';
+        swimmerProfileEditBtn.onclick = function () {
+          if (modals && modals.openEditModal) modals.openEditModal(me);
+        };
+      }
+    } catch (err) {
+      swimmerProfileContent.innerHTML = '<p class="text-muted">Could not load profile: ' + (err.message || String(err)) + '</p>';
+      if (swimmerProfileEditBtn) swimmerProfileEditBtn.style.display = 'none';
+    }
+  }
 
   if (runBtn) {
     runBtn.addEventListener('click', async () => {
@@ -53,6 +124,15 @@
 
   if (openAdminBtn && window.RelayApp.admin && window.RelayApp.admin.openAdminPanel) {
     openAdminBtn.addEventListener('click', () => window.RelayApp.admin.openAdminPanel());
+  }
+
+  if (logoutBtn && window.RelayApp.clearAuthToken) {
+    logoutBtn.addEventListener('click', () => {
+      try {
+        window.RelayApp.clearAuthToken();
+      } catch (_) {}
+      window.location.href = 'login.html';
+    });
   }
 
   if (addSwimmerBtn) {
@@ -112,6 +192,16 @@
     const swimmersList = document.getElementById('swimmers-list');
     if (swimmersList) swimmersList.innerHTML = '<p class="text-muted">Loading…</p>';
     try {
+      const me = await api.fetchAuthMe();
+      state.currentUser = me ? { role: me.role || 'coach', swimmer_id: me.swimmer_id != null ? me.swimmer_id : null } : null;
+      applyRoleVisibility(state.currentUser);
+
+      if (state.currentUser && state.currentUser.role === 'swimmer') {
+        await loadMyProfile();
+        api.clearLoading();
+        return;
+      }
+
       await api.ensureDbPath();
       try {
         const teamsData = await window.electronAPI.runBackend({ command: 'list-teams', dbPath: state.dbPath });
@@ -125,7 +215,6 @@
       } catch (_) {
         window.RelayApp.AVAILABILITY_KEYS = ['freestyle', 'medley', 'freestyle_mix', 'medley_mix'];
       }
-      // Load meets first so selectedMeetId is set (from last session); then load swimmers via backend so list is filtered by meet teams
       api.setLoading('Loading meets…');
       await api.loadCompetitions();
       await api.loadSwimmers();
