@@ -63,9 +63,36 @@
       border: 1px solid var(--border);
       color: var(--text);
     }
-    .login-card .form-group input:focus {
+    .login-card .form-group input:focus,
+    .login-card .form-group select:focus {
       outline: none;
       border-color: var(--accent);
+    }
+    .login-card .form-group select {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .login-toggle {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+    .login-toggle a {
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .login-toggle a:hover {
+      text-decoration: underline;
+    }
+    .login-view.hidden,
+    .signup-view.hidden {
+      display: none !important;
     }
   </style>
 </head>
@@ -73,26 +100,62 @@
   <div class="login-wrapper">
     <div class="login-card">
       <h1>Relay Team Builder</h1>
-      <p>Sign in to manage meets, swimmers, and relay teams.</p>
-      <form id="login-form">
-        <div class="form-group">
-          <label for="login-email">Email</label>
-          <input type="text" id="login-email" autocomplete="email" required />
-        </div>
-        <div class="form-group">
-          <label for="login-password">Password</label>
-          <input type="password" id="login-password" autocomplete="current-password" required />
-        </div>
-        <div class="login-actions">
-          <button type="submit" class="btn btn-primary" id="login-submit">Log in</button>
-        </div>
-        <div class="login-error" id="login-error"></div>
-      </form>
+
+      <div id="login-view" class="login-view">
+        <p>Sign in to manage meets, swimmers, and relay teams.</p>
+        <form id="login-form">
+          <div class="form-group">
+            <label for="login-email">Email</label>
+            <input type="text" id="login-email" autocomplete="email" required />
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" autocomplete="current-password" required />
+          </div>
+          <div class="login-actions">
+            <button type="submit" class="btn btn-primary" id="login-submit">Log in</button>
+          </div>
+          <div class="login-error" id="login-error"></div>
+        </form>
+        <p class="login-toggle">Don’t have an account? <a id="show-signup" href="#">Create account</a></p>
+      </div>
+
+      <div id="signup-view" class="signup-view hidden">
+        <p>Create an account to use Relay Team Builder.</p>
+        <form id="signup-form">
+          <div class="form-group">
+            <label for="signup-email">Email</label>
+            <input type="text" id="signup-email" autocomplete="email" required />
+          </div>
+          <div class="form-group">
+            <label for="signup-role">I am a</label>
+            <select id="signup-role">
+              <option value="coach">Coach</option>
+              <option value="swimmer">Swimmer</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="signup-password">Password</label>
+            <input type="password" id="signup-password" autocomplete="new-password" required minlength="6" />
+          </div>
+          <div class="form-group">
+            <label for="signup-password-confirm">Confirm password</label>
+            <input type="password" id="signup-password-confirm" autocomplete="new-password" required minlength="6" />
+          </div>
+          <div class="login-actions">
+            <button type="submit" class="btn btn-primary" id="signup-submit">Create account</button>
+          </div>
+          <div class="login-error" id="signup-error"></div>
+        </form>
+        <p class="login-toggle">Already have an account? <a id="show-login" href="#">Sign in</a></p>
+      </div>
+
       <div class="login-footer">
         Auth server: <span id="login-auth-url"></span>
       </div>
     </div>
   </div>
+  <script src="auth-config.js"></script>
   <script src="renderer/login.js"></script>
 </body>
 </html>

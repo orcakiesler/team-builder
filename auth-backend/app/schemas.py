@@ -4,17 +4,19 @@ from typing import Optional, Literal
 from pydantic import BaseModel, EmailStr
 
 
-Role = Literal["admin", "user"]
+Role = Literal["admin", "coach", "swimmer"]
 
 
 class UserBase(BaseModel):
     email: EmailStr
-    role: Role = "user"
+    role: Role = "coach"
+    swimmer_id: Optional[int] = None
 
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
+    role: Role = "coach"
 
 
 class UserRead(UserBase):
@@ -27,6 +29,10 @@ class UserRead(UserBase):
 
 class UserUpdateRole(BaseModel):
     role: Role
+
+
+class LinkSwimmerRequest(BaseModel):
+    swimmer_id: Optional[int] = None
 
 
 class Token(BaseModel):

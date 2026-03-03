@@ -11,6 +11,8 @@
     selectedMeetId: null,
     lastTeamsResult: null,
     swimmerSelectMode: false,
+    /** Current logged-in user from /auth/me: { role: 'admin'|'coach'|'swimmer', swimmer_id: number|null } */
+    currentUser: null,
   };
 
   function getAuthToken() {
