@@ -17,6 +17,7 @@ def ensure_database(db_path: str | Path) -> None:
     create_database(db_path)
     _migrate_swimmers_medical(db_path)
     _migrate_swimmers_team(db_path)
+    _migrate_swimmers_email(db_path)
     _migrate_swimmer_meet_availability(db_path)
     _migrate_teams_table(db_path)
     _migrate_competition_teams(db_path)
@@ -50,6 +51,20 @@ def _migrate_swimmers_team(db_path: str | Path) -> None:
         if "team" not in columns:
             cur.execute("ALTER TABLE swimmers ADD COLUMN team TEXT")
             cur.execute("UPDATE swimmers SET team = ? WHERE team IS NULL OR team = ''", ("Haifa - masters",))
+        conn.commit()
+
+
+def _migrate_swimmers_email(db_path: str | Path) -> None:
+    """Add email column to swimmers if it does not exist (for matching login to profile)."""
+    path = Path(db_path)
+    if not path.exists():
+        return
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(swimmers)")
+        columns = [row[1] for row in cur.fetchall()]
+        if "email" not in columns:
+            cur.execute("ALTER TABLE swimmers ADD COLUMN email TEXT")
         conn.commit()
 
 
@@ -214,6 +229,7 @@ def create_database(db_path: str | Path) -> None:
                 gender TEXT,
                 year_of_birth INTEGER,
                 team TEXT NOT NULL,
+                email TEXT,
                 freestyle_50 REAL,
                 backstroke_50 REAL,
                 breaststroke_50 REAL,
@@ -340,7 +356,7 @@ def load_all(
             cur.execute(
                 """
                 SELECT id, first_name, last_name, gender, year_of_birth,
-                       team,
+                       team, email,
                        freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
                        medical_date
                 FROM swimmers
@@ -353,7 +369,7 @@ def load_all(
             cur.execute(
                 """
                 SELECT id, first_name, last_name, gender, year_of_birth,
-                       team,
+                       team, email,
                        freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
                        medical_date
                 FROM swimmers
@@ -371,6 +387,7 @@ def load_all(
             gender,
             year_of_birth,
             team,
+            email,
             freestyle_50,
             backstroke_50,
             breaststroke_50,
@@ -388,6 +405,7 @@ def load_all(
             "year_of_birth": year_of_birth,
             "age": age,
             "team": team or "Haifa - masters",
+            "email": (email or "").strip() or None,
             "freestyle_50": freestyle_50,
             "backstroke_50": backstroke_50,
             "breaststroke_50": breaststroke_50,
@@ -411,11 +429,11 @@ def insert_one(db_path: str | Path, person: Person) -> int:
             """
             INSERT INTO swimmers (
                 first_name, last_name, gender, year_of_birth,
-                team,
+                team, email,
                 freestyle_50, backstroke_50, breaststroke_50, butterfly_50,
                 availability_json, medical_date
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 person.first_name,
@@ -423,6 +441,7 @@ def insert_one(db_path: str | Path, person: Person) -> int:
                 person.gender,
                 person.year_of_birth,
                 person.team or "Haifa - masters",
+                (person.email or "").strip() or None,
                 person.freestyle_50,
                 person.backstroke_50,
                 person.breaststroke_50,
@@ -642,6 +661,7 @@ def insert_people(db_path: str | Path, people: Iterable[Person]) -> None:
                 p.gender,
                 p.year_of_birth,
                 p.team or "Haifa - masters",
+                (p.email or "").strip() or None,
                 p.freestyle_50,
                 p.backstroke_50,
                 p.breaststroke_50,
@@ -659,6 +679,7 @@ def insert_people(db_path: str | Path, people: Iterable[Person]) -> None:
                 gender,
                 year_of_birth,
                 team,
+                email,
                 freestyle_50,
                 backstroke_50,
                 breaststroke_50,
@@ -666,7 +687,7 @@ def insert_people(db_path: str | Path, people: Iterable[Person]) -> None:
                 availability_json,
                 medical_date
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )
@@ -682,6 +703,7 @@ def update_swimmer(
     gender: str | None = None,
     year_of_birth: int | None = None,
     team: str | None = None,
+    email: str | None = None,
     freestyle_50: float | None = None,
     backstroke_50: float | None = None,
     breaststroke_50: float | None = None,
@@ -707,6 +729,9 @@ def update_swimmer(
     if team is not None:
         updates.append("team = ?")
         args.append(team)
+    if email is not None:
+        updates.append("email = ?")
+        args.append((email or "").strip() or None)
     if freestyle_50 is not None:
         updates.append("freestyle_50 = ?")
         args.append(freestyle_50)

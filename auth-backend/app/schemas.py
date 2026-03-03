@@ -17,6 +17,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     role: Role = "coach"
+    invite_code: Optional[str] = None  # when set, account is linked to that swimmer (role forced to swimmer)
 
 
 class UserRead(UserBase):
@@ -33,6 +34,16 @@ class UserUpdateRole(BaseModel):
 
 class LinkSwimmerRequest(BaseModel):
     swimmer_id: Optional[int] = None
+
+
+class InviteCodeCreate(BaseModel):
+    """Either swimmer_id (for swimmer invite) or role (for coach/admin invite)."""
+    swimmer_id: Optional[int] = None
+    role: Optional[Literal["coach", "admin"]] = None
+
+
+class InviteCodeRead(BaseModel):
+    code: str
 
 
 class Token(BaseModel):

@@ -117,6 +117,8 @@ def cmd_update_swimmer(db_path: Path, payload: dict) -> dict:
         if team_val not in teams:
             raise ValueError(f"Team must be one of: {', '.join(teams)}")
         kwargs["team"] = team_val
+    if "email" in payload:
+        kwargs["email"] = (payload.get("email") or "").strip() or None
 
     relay_db.update_swimmer(db_path, int(swimmer_id), **kwargs)
     if competition_id is not None and availability is not None:
@@ -165,6 +167,7 @@ def cmd_add_swimmer(db_path: Path, payload: dict) -> dict:
         raise ValueError("Availability can only be set when a meet is selected (competition_id required)")
     availability = payload.get("availability") if isinstance(payload.get("availability"), dict) else {}
 
+    email = (payload.get("email") or "").strip() or None
     person = Person(
         first_name=first_name,
         last_name=last_name,
@@ -172,6 +175,7 @@ def cmd_add_swimmer(db_path: Path, payload: dict) -> dict:
         year_of_birth=year_of_birth,
         age=(date.today().year - year_of_birth) if year_of_birth else None,
         team=team_raw,
+        email=email,
         freestyle_50=freestyle_50,
         backstroke_50=backstroke_50,
         breaststroke_50=breaststroke_50,

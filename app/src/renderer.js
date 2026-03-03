@@ -43,19 +43,31 @@
     if (swimmerProfileSection) swimmerProfileSection.classList.toggle('hidden', !isSwimmer);
   }
 
+  function _normEmail(e) {
+    return (e || '').trim().toLowerCase();
+  }
+
   async function loadMyProfile() {
     if (!state.currentUser || state.currentUser.role !== 'swimmer' || !swimmerProfileContent) return;
-    const sid = state.currentUser.swimmer_id;
-    if (sid == null) {
-      swimmerProfileContent.innerHTML = '<p class="text-muted">No profile linked. Contact your coach or admin to link your account to a swimmer.</p>';
-      if (swimmerProfileEditBtn) swimmerProfileEditBtn.style.display = 'none';
-      return;
-    }
+    let sid = state.currentUser.swimmer_id;
     try {
       await api.ensureDbPath();
       const data = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath: state.dbPath });
       const swimmers = data.swimmers || [];
-      const me = swimmers.find(function (s) { return s.id === sid; });
+      let me = sid != null ? swimmers.find(function (s) { return s.id === sid; }) : null;
+      if (!me && state.currentUser.email) {
+        const loginEmail = _normEmail(state.currentUser.email);
+        me = swimmers.find(function (s) {
+          const swimmerEmail = _normEmail(s.email);
+          return swimmerEmail && swimmerEmail === loginEmail;
+        }) || null;
+        if (me) sid = me.id;
+      }
+      if (sid == null || !me) {
+        swimmerProfileContent.innerHTML = '<p class="text-muted">No profile linked. Add your email to your swimmer profile (coach does this), or sign up with the same email—or ask your coach to link your account.</p>';
+        if (swimmerProfileEditBtn) swimmerProfileEditBtn.style.display = 'none';
+        return;
+      }
       if (!me) {
         swimmerProfileContent.innerHTML = '<p class="text-muted">Profile not found. Contact your coach or admin.</p>';
         if (swimmerProfileEditBtn) swimmerProfileEditBtn.style.display = 'none';
@@ -193,7 +205,11 @@
     if (swimmersList) swimmersList.innerHTML = '<p class="text-muted">Loading…</p>';
     try {
       const me = await api.fetchAuthMe();
-      state.currentUser = me ? { role: me.role || 'coach', swimmer_id: me.swimmer_id != null ? me.swimmer_id : null } : null;
+      state.currentUser = me ? {
+        role: me.role || 'coach',
+        swimmer_id: me.swimmer_id != null ? me.swimmer_id : null,
+        email: (me.email || '').trim() || null,
+      } : null;
       applyRoleVisibility(state.currentUser);
 
       if (state.currentUser && state.currentUser.role === 'swimmer') {

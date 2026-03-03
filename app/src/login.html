@@ -53,6 +53,11 @@
       color: var(--text-muted);
       text-align: center;
     }
+    .optional {
+      font-weight: normal;
+      color: var(--text-muted);
+      font-size: 0.85em;
+    }
     .login-card .form-group input {
       width: 100%;
       min-width: 0;
@@ -133,6 +138,10 @@
               <option value="coach">Coach</option>
               <option value="swimmer">Swimmer</option>
             </select>
+          </div>
+          <div class="form-group">
+            <label for="signup-invite-code">Invite code <span class="optional">(if your coach gave you one)</span></label>
+            <input type="text" id="signup-invite-code" autocomplete="off" placeholder="e.g. ABC123" maxlength="12" />
           </div>
           <div class="form-group">
             <label for="signup-password">Password</label>

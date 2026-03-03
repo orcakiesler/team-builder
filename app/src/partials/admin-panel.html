@@ -29,8 +29,22 @@
           <ul class="teams-list admin-teams-list" id="admin-teams-list"></ul>
         </section>
         <section class="admin-section">
+          <h4>Invite swimmers</h4>
+          <p class="text-muted admin-hint">Add each swimmer’s email on their profile; they sign up with that email and are matched automatically. Or generate a one-time code per swimmer.</p>
+          <button type="button" class="btn btn-secondary btn-sm" id="admin-open-invite-swimmers-btn">Get invite code for a swimmer…</button>
+        </section>
+        <section class="admin-section">
+          <h4>Invite coaches &amp; admins</h4>
+          <p class="text-muted admin-hint">Generate a one-time code for a coach or admin. Send them the code; they enter it when creating an account.</p>
+          <div class="admin-invite-role-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="admin-invite-coach-btn">Get coach invite code</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="admin-invite-admin-btn">Get admin invite code</button>
+          </div>
+          <div id="admin-invite-role-result" class="admin-invite-result hidden"></div>
+        </section>
+        <section class="admin-section">
           <h4>User accounts</h4>
-          <p class="text-muted admin-hint">Link swimmer accounts to a swimmer profile so they can view and edit their own profile.</p>
+          <p class="text-muted admin-hint">All users (admins, coaches, swimmers) are listed here. Link swimmer accounts to a profile or change roles.</p>
           <div id="admin-users-list" class="admin-users-list"></div>
         </section>
         <section class="admin-section">
@@ -49,6 +63,19 @@
           <label class="checkbox-label"><input type="checkbox" id="admin-reset-clear-teams" /> Also clear all teams</label>
           <button type="button" class="btn btn-danger btn-sm" id="admin-reset-db-btn">Reset database</button>
         </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="admin-invite-swimmers-modal-overlay">
+    <div class="modal modal-admin" id="admin-invite-swimmers-modal">
+      <div class="modal-header">
+        <h3>Get invite code for a swimmer</h3>
+        <button type="button" class="modal-close" id="admin-invite-swimmers-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted admin-hint">Choose a swimmer to generate a one-time code. Send them the code; they enter it when creating an account.</p>
+        <div id="admin-invite-codes-list" class="admin-invite-codes-list admin-invite-codes-list-popup"></div>
       </div>
     </div>
   </div>

@@ -226,6 +226,78 @@
     }
   }
 
+  async function refreshAdminInviteCodesList() {
+    const listEl = document.getElementById('admin-invite-codes-list');
+    if (!listEl) return;
+    const token = window.RelayApp.getAuthToken && window.RelayApp.getAuthToken();
+    const baseUrl = window.RELAY_AUTH_BASE_URL || api.AUTH_BASE_URL || 'http://127.0.0.1:8000';
+    if (!token) {
+      listEl.innerHTML = '<p class="text-muted">Sign in to generate invite codes.</p>';
+      return;
+    }
+    try {
+      await api.ensureDbPath();
+      const swimmersData = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath: state.dbPath });
+      const swimmers = swimmersData.swimmers || [];
+      if (swimmers.length === 0) {
+        listEl.innerHTML = '<p class="text-muted">Add swimmers first, then generate a code for each.</p>';
+        return;
+      }
+      listEl.innerHTML = swimmers
+        .map(function (s) {
+          const name = utils.escapeHtml(s.full_name || 'Swimmer ' + (s.id || ''));
+          return (
+            '<div class="admin-invite-row" data-swimmer-id="' + (s.id || '') + '">' +
+            '<span class="admin-invite-name">' + name + '</span> ' +
+            '<button type="button" class="btn btn-secondary btn-sm admin-invite-get-btn" data-swimmer-id="' + (s.id || '') + '">Get invite code</button>' +
+            '<span class="admin-invite-result hidden"></span>' +
+            '</div>'
+          );
+        })
+        .join('');
+      listEl.querySelectorAll('.admin-invite-get-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          const swimmerId = parseInt(btn.getAttribute('data-swimmer-id'), 10);
+          const row = btn.closest('.admin-invite-row');
+          const resultEl = row ? row.querySelector('.admin-invite-result') : null;
+          if (!row || !resultEl) return;
+          btn.disabled = true;
+          btn.textContent = '…';
+          try {
+            const resp = await fetch(baseUrl + '/admin/invite-codes', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token,
+              },
+              body: JSON.stringify({ swimmer_id: swimmerId }),
+            });
+            if (!resp.ok) throw new Error('Failed to create code');
+            const data = await resp.json();
+            const code = (data && data.code) || '';
+            resultEl.textContent = 'Code: ' + code + ' ';
+            resultEl.classList.remove('hidden');
+            const copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
+            copyBtn.className = 'btn btn-primary btn-sm';
+            copyBtn.textContent = 'Copy';
+            copyBtn.addEventListener('click', function () {
+              navigator.clipboard.writeText(code).then(function () { copyBtn.textContent = 'Copied!'; });
+            });
+            resultEl.appendChild(copyBtn);
+          } catch (err) {
+            resultEl.textContent = 'Error: ' + (err.message || String(err));
+            resultEl.classList.remove('hidden');
+          }
+          btn.disabled = false;
+          btn.textContent = 'Get invite code';
+        });
+      });
+    } catch (err) {
+      listEl.innerHTML = '<p class="text-muted">Could not load swimmers.</p>';
+    }
+  }
+
   async function refreshAdminUsersList() {
     const listEl = document.getElementById('admin-users-list');
     if (!listEl) return;
@@ -316,6 +388,17 @@
     if (adminNewTeamInput) setTimeout(() => adminNewTeamInput.focus(), 100);
   }
 
+  async function openInviteSwimmersPopup() {
+    const overlay = document.getElementById('admin-invite-swimmers-modal-overlay');
+    if (overlay) overlay.classList.remove('hidden');
+    await refreshAdminInviteCodesList();
+  }
+
+  function closeInviteSwimmersPopup() {
+    const overlay = document.getElementById('admin-invite-swimmers-modal-overlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
   const adminBackupDbBtn = document.getElementById('admin-backup-db-btn');
   const adminOpenDbFolderBtn = document.getElementById('admin-open-db-folder-btn');
   const adminRelayTypesList = document.getElementById('admin-relay-types-list');
@@ -403,6 +486,54 @@
       } finally {
         api.clearLoading();
       }
+    });
+  }
+
+  const adminInviteCoachBtn = document.getElementById('admin-invite-coach-btn');
+  const adminInviteAdminBtn = document.getElementById('admin-invite-admin-btn');
+  const adminInviteRoleResult = document.getElementById('admin-invite-role-result');
+  async function createRoleInviteCode(role) {
+    if (!adminInviteRoleResult) return;
+    const token = window.RelayApp.getAuthToken && window.RelayApp.getAuthToken();
+    const baseUrl = window.RELAY_AUTH_BASE_URL || api.AUTH_BASE_URL || 'http://127.0.0.1:8000';
+    if (!token) { adminInviteRoleResult.textContent = 'Sign in required.'; adminInviteRoleResult.classList.remove('hidden'); return; }
+    adminInviteRoleResult.classList.add('hidden');
+    adminInviteRoleResult.innerHTML = '';
+    try {
+      const resp = await fetch(baseUrl + '/admin/invite-codes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ role: role }),
+      });
+      if (!resp.ok) throw new Error('Failed to create code');
+      const data = await resp.json();
+      const code = (data && data.code) || '';
+      adminInviteRoleResult.textContent = (role === 'admin' ? 'Admin' : 'Coach') + ' code: ' + code + ' ';
+      adminInviteRoleResult.classList.remove('hidden');
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'btn btn-primary btn-sm';
+      copyBtn.textContent = 'Copy';
+      copyBtn.addEventListener('click', function () {
+        navigator.clipboard.writeText(code).then(function () { copyBtn.textContent = 'Copied!'; });
+      });
+      adminInviteRoleResult.appendChild(copyBtn);
+    } catch (err) {
+      adminInviteRoleResult.textContent = 'Error: ' + (err.message || String(err));
+      adminInviteRoleResult.classList.remove('hidden');
+    }
+  }
+  if (adminInviteCoachBtn) adminInviteCoachBtn.addEventListener('click', function () { createRoleInviteCode('coach'); });
+  if (adminInviteAdminBtn) adminInviteAdminBtn.addEventListener('click', function () { createRoleInviteCode('admin'); });
+
+  const adminOpenInviteSwimmersBtn = document.getElementById('admin-open-invite-swimmers-btn');
+  const adminInviteSwimmersModalClose = document.getElementById('admin-invite-swimmers-modal-close');
+  const adminInviteSwimmersModalOverlay = document.getElementById('admin-invite-swimmers-modal-overlay');
+  if (adminOpenInviteSwimmersBtn) adminOpenInviteSwimmersBtn.addEventListener('click', function () { openInviteSwimmersPopup(); });
+  if (adminInviteSwimmersModalClose) adminInviteSwimmersModalClose.addEventListener('click', closeInviteSwimmersPopup);
+  if (adminInviteSwimmersModalOverlay) {
+    adminInviteSwimmersModalOverlay.addEventListener('click', function (e) {
+      if (e.target === adminInviteSwimmersModalOverlay) closeInviteSwimmersPopup();
     });
   }
 

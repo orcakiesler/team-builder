@@ -13,8 +13,16 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     algorithm: str = "HS256"
 
-    # Database
+    # Database: sqlite for local dev; use postgres (e.g. Render Postgres) in production so data survives restarts
     database_url: str = "sqlite:///./auth.db"
+
+    @property
+    def database_url_normalized(self) -> str:
+        """Use postgresql:// so SQLAlchemy uses the right driver (Render gives postgres://)."""
+        u = self.database_url
+        if u.startswith("postgres://"):
+            return "postgresql://" + u[9:]
+        return u
 
     class Config:
         env_prefix = "AUTH_"

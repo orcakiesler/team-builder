@@ -25,6 +25,8 @@ class Person:
 
     team: str = ""  # mandatory; must be one of TEAMS (stable, like name/medicals/birth year)
 
+    email: Optional[str] = None  # for matching login to this swimmer (swimmer signs up with this email)
+
     freestyle_50: Optional[float] = None
     backstroke_50: Optional[float] = None
     breaststroke_50: Optional[float] = None

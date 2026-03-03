@@ -118,6 +118,10 @@
         <input type="number" id="edit-year-of-birth" required min="1900" max="2030" />
       </div>
       <div class="form-group">
+        <label for="edit-email">Email</label>
+        <input type="email" id="edit-email" placeholder="e.g. swimmer@example.com" />
+      </div>
+      <div class="form-group">
         <label for="edit-team">Team <span class="required">*</span></label>
         <select id="edit-team" required>${teamOptions}</select>
       </div>
@@ -147,6 +151,8 @@
     document.getElementById('edit-last-name').value = swimmer.last_name || '';
     document.getElementById('edit-gender').value = swimmer.gender === 'f' ? 'f' : 'm';
     document.getElementById('edit-year-of-birth').value = swimmer.year_of_birth ?? '';
+    const editEmail = document.getElementById('edit-email');
+    if (editEmail) editEmail.value = (swimmer.email || '').trim();
     const editTeam = document.getElementById('edit-team');
     if (editTeam) {
       const teamVal = (swimmer.team || '').trim();
@@ -194,6 +200,8 @@
     const backstroke_50 = document.getElementById('edit-backstroke').value.trim();
     const breaststroke_50 = document.getElementById('edit-breaststroke').value.trim();
     const butterfly_50 = document.getElementById('edit-butterfly').value.trim();
+    const emailEl = document.getElementById('edit-email');
+    const email = emailEl ? emailEl.value.trim() || null : null;
     const payload = {
       id: swimmerBeingEdited.id,
       first_name,
@@ -201,6 +209,7 @@
       gender: gender || null,
       year_of_birth: year_of_birth === '' ? null : parseInt(year_of_birth, 10),
       team: team || null,
+      email,
       medical_date,
       freestyle_50: freestyle_50 === '' ? null : parseFloat(freestyle_50),
       backstroke_50: backstroke_50 === '' ? null : parseFloat(backstroke_50),
@@ -655,12 +664,15 @@
       const backstroke_50 = document.getElementById('new-backstroke') && document.getElementById('new-backstroke').value.trim();
       const breaststroke_50 = document.getElementById('new-breaststroke') && document.getElementById('new-breaststroke').value.trim();
       const butterfly_50 = document.getElementById('new-butterfly') && document.getElementById('new-butterfly').value.trim();
+      const newEmail = document.getElementById('new-email');
+      const email = newEmail ? newEmail.value.trim() || undefined : undefined;
       const payload = {
         first_name,
         last_name,
         year_of_birth,
         gender,
         team: teamVal,
+        email,
         medical_date: medical_date || undefined,
         freestyle_50: freestyle_50 === '' ? undefined : parseFloat(freestyle_50),
         backstroke_50: backstroke_50 === '' ? undefined : parseFloat(backstroke_50),

@@ -180,9 +180,30 @@ body {
 .admin-meets-list {
   margin-bottom: 0.75rem;
 }
-.admin-users-list {
+.admin-users-list,
+.admin-invite-codes-list {
   margin-bottom: 0.75rem;
 }
+.admin-invite-codes-list-popup {
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-top: 0.5rem;
+}
+.admin-invite-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+}
+.admin-invite-name { font-weight: 500; }
+.admin-invite-result { margin-left: 0.25rem; }
+.admin-invite-role-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.optional-hint { font-weight: normal; color: var(--text-muted); font-size: 0.85em; }
 .admin-user-row {
   display: flex;
   align-items: center;

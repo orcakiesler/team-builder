@@ -41,6 +41,7 @@
     const signupRole = document.getElementById('signup-role');
     const signupPassword = document.getElementById('signup-password');
     const signupPasswordConfirm = document.getElementById('signup-password-confirm');
+    const signupInviteCode = document.getElementById('signup-invite-code');
     const signupSubmitBtn = document.getElementById('signup-submit');
     const signupErrorEl = document.getElementById('signup-error');
 
@@ -148,6 +149,9 @@
         signupSubmitBtn.textContent = 'Creating account…';
 
         const role = (signupRole && signupRole.value) || 'coach';
+        const inviteCode = (signupInviteCode && signupInviteCode.value && signupInviteCode.value.trim()) || '';
+        const payload = { email, password, role };
+        if (inviteCode) payload.invite_code = inviteCode.trim().toUpperCase();
         try {
           const resp = await fetch(`${AUTH_BASE_URL}/auth/register`, {
             method: 'POST',
@@ -155,7 +159,7 @@
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
-            body: JSON.stringify({ email, password, role }),
+            body: JSON.stringify(payload),
           });
 
           if (!resp.ok) {
