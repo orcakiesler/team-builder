@@ -184,10 +184,75 @@ body {
 .admin-invite-codes-list {
   margin-bottom: 0.75rem;
 }
+.admin-users-list-search-wrap {
+  margin-bottom: 0.75rem;
+}
+.admin-users-list-search {
+  width: 100%;
+  max-width: 20rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+}
+.modal-users-list {
+  max-width: 640px;
+  width: 95vw;
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+}
+.modal-users-list .modal-body {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.admin-users-list-popup {
+  max-height: 50vh;
+  min-height: 120px;
+  overflow-y: auto;
+  margin-top: 0.25rem;
+  flex: 1 1 auto;
+}
+.admin-users-list-popup .admin-user-row {
+  align-items: flex-start;
+  gap: 0.75rem 1rem;
+}
+.admin-user-row-info {
+  min-width: 0;
+}
+.admin-user-display-name {
+  word-break: break-word;
+  white-space: normal;
+}
+.admin-user-meta {
+  word-break: break-word;
+}
+.admin-user-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  flex-shrink: 0;
+}
+.admin-user-row-actions select {
+  min-width: 140px;
+  max-width: 220px;
+}
+.admin-users-list-popup .admin-user-row-actions {
+  margin-top: 0.2rem;
+}
 .admin-invite-codes-list-popup {
   max-height: 60vh;
   overflow-y: auto;
   margin-top: 0.5rem;
+}
+.admin-user-invite-result {
+  margin-left: 0.25rem;
+  font-size: 0.85rem;
 }
 .admin-invite-row {
   display: flex;
@@ -221,9 +286,22 @@ body {
 }
 .admin-user-row-info .user-email { font-weight: 600; display: block; }
 .admin-user-row-info .user-role { color: var(--text-muted); font-size: 0.85em; }
-.admin-user-link {
+.admin-user-display-name {
+  display: block;
+  font-weight: 600;
+  font-size: 1rem;
+}
+.admin-user-meta {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin-top: 0.15rem;
+}
+.admin-user-link,
+.admin-user-row-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.35rem;
   flex-shrink: 0;
 }

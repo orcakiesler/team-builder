@@ -762,15 +762,36 @@ def replace_team_coach_email(db_path: str | Path, old_email: str, new_email: str
         conn.commit()
 
 
-def load_teams_with_coaches(db_path: str | Path) -> List[Dict[str, Any]]:
-    """Return list of { team_name, coaches: [email, ...] } for all teams."""
+def get_teams_for_coach(db_path: str | Path, coach_email: str) -> List[str]:
+    """Return list of team names this coach is assigned to."""
     path = Path(db_path)
-    teams = load_teams(path)
-    if not teams:
+    email = (coach_email or "").strip()
+    if not path.exists() or not email:
         return []
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT team_name FROM team_coaches WHERE coach_email = ? ORDER BY team_name",
+            (email,),
+        )
+        return [row[0] for row in cur.fetchall()]
+
+
+def load_teams_with_coaches(db_path: str | Path) -> List[Dict[str, Any]]:
+    """Return list of { team_name, coaches: [email, ...] } for all teams.
+    Includes teams from the teams table plus any team that has rows in team_coaches (so assigned coaches always show)."""
+    path = Path(db_path)
+    if not path.exists():
+        return []
+    teams_from_table = set(load_teams(path))
+    with sqlite3.connect(path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT DISTINCT team_name FROM team_coaches ORDER BY team_name")
+        teams_from_assignments = {row[0] for row in cur.fetchall()}
+    all_teams = sorted(teams_from_table | teams_from_assignments)
     return [
         {"team_name": t, "coaches": load_team_coaches(path, t)}
-        for t in teams
+        for t in all_teams
     ]
 
 

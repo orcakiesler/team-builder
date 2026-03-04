@@ -7,14 +7,16 @@ from relay_builder import db as relay_db
 
 
 def cmd_get_coach(db_path: Path, payload: dict) -> dict:
-    """Get coach by email. Creates empty row if missing. Payload: { "email": str }."""
+    """Get coach by email. Creates empty row if missing. Payload: { "email": str }.
+    Returns coach dict plus "teams": [team names] this coach is assigned to."""
     email = (payload.get("email") or "").strip()
     if not email:
         return {"error": "email is required"}
     coach = relay_db.get_coach_by_email(db_path, email)
     if coach is None:
         return {"error": "Coach not found"}
-    return {"coach": coach}
+    teams = relay_db.get_teams_for_coach(db_path, email)
+    return {"coach": coach, "teams": teams}
 
 
 def cmd_update_coach(db_path: Path, payload: dict) -> dict:

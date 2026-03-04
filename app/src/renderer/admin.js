@@ -29,7 +29,6 @@
     await refreshMeetsList();
     await refreshTeamsList();
     await refreshTeamCoachesList();
-    await refreshAdminUsersList();
   }
 
   async function refreshMeetsList() {
@@ -211,17 +210,21 @@
         adminTeamCoachesList.innerHTML = '<p class="text-muted">No teams. Add a team in the Teams section first.</p>';
         return;
       }
+      const coachEmails = new Set(coaches.map((c) => (c.email || '').trim()).filter(Boolean));
       adminTeamCoachesList.innerHTML = teamsWithCoaches
         .map(
           (t) => {
             const teamName = t.team_name || '';
             const assigned = t.coaches || [];
-            const checkboxes = coaches
+            const assignedSet = new Set(assigned.filter(Boolean));
+            const allEmails = new Set([...coachEmails, ...assignedSet]);
+            const checkboxes = Array.from(allEmails)
+              .sort((a, b) => a.localeCompare(b))
               .map(
-                (c) => {
-                  const email = c.email || '';
-                  const label = (c.name && c.name.trim()) ? utils.escapeHtml(c.name) + ' (' + utils.escapeHtml(email) + ')' : utils.escapeHtml(email);
-                  const checked = assigned.indexOf(email) !== -1 ? ' checked' : '';
+                (email) => {
+                  const c = coaches.find((x) => (x.email || '').trim() === email);
+                  const label = (c && c.name && c.name.trim()) ? utils.escapeHtml(c.name) + ' (' + utils.escapeHtml(email) + ')' : utils.escapeHtml(email);
+                  const checked = assignedSet.has(email) ? ' checked' : '';
                   return `<label class="checkbox-label admin-team-coach-cb"><input type="checkbox" data-team="${utils.escapeHtml(teamName)}" data-email="${utils.escapeHtml(email)}"${checked} /> ${label}</label>`;
                 }
               )
@@ -283,50 +286,135 @@
     }
   }
 
-  async function refreshAdminInviteCodesList() {
-    const listEl = document.getElementById('admin-invite-codes-list');
-    if (!listEl) return;
+  const ROLE_ORDER = { admin: 0, coach: 1, swimmer: 2 };
+
+  async function refreshUsersListPopup() {
+    const listEl = document.getElementById('admin-users-list-popup');
     const token = window.RelayApp.getAuthToken && window.RelayApp.getAuthToken();
     const baseUrl = window.RELAY_AUTH_BASE_URL || api.AUTH_BASE_URL || 'http://127.0.0.1:8000';
+    if (!listEl) return;
     if (!token) {
-      listEl.innerHTML = '<p class="text-muted">Sign in to generate invite codes.</p>';
+      listEl.innerHTML = '<p class="text-muted">Sign in required.</p>';
       return;
     }
     try {
-      await api.ensureDbPath();
-      const swimmersData = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath: state.dbPath });
-      const swimmers = swimmersData.swimmers || [];
-      if (swimmers.length === 0) {
-        listEl.innerHTML = '<p class="text-muted">Add swimmers first, then generate a code for each.</p>';
+      const usersResp = await fetch(`${baseUrl}/admin/users`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!usersResp.ok) {
+        listEl.innerHTML = '<p class="text-muted">Could not load users.</p>';
         return;
       }
-      listEl.innerHTML = swimmers
-        .map(function (s) {
-          const name = utils.escapeHtml(s.full_name || 'Swimmer ' + (s.id || ''));
+      const users = await usersResp.json();
+      await api.ensureDbPath();
+      const [swimmersData, coachesData] = await Promise.all([
+        window.electronAPI.runBackend({ command: 'list-swimmers', dbPath: state.dbPath }),
+        window.electronAPI.runBackend({ command: 'list-coaches', dbPath: state.dbPath }),
+      ]);
+      const swimmers = swimmersData.swimmers || [];
+      const coaches = coachesData.coaches || [];
+      if (users.length === 0) {
+        listEl.innerHTML = '<p class="text-muted">No user accounts yet.</p>';
+        return;
+      }
+      const sorted = users.slice().sort(function (a, b) {
+        const oa = ROLE_ORDER[a.role] ?? 99;
+        const ob = ROLE_ORDER[b.role] ?? 99;
+        if (oa !== ob) return oa - ob;
+        return (a.email || '').localeCompare(b.email || '');
+      });
+      function normEmail(e) { return (e || '').trim().toLowerCase(); }
+      function oneLine(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
+      function displayName(u, linkedSw, coach) {
+        if (u.role === 'swimmer' && linkedSw && linkedSw.full_name) return oneLine(linkedSw.full_name);
+        if (u.role === 'coach' && coach && coach.name && coach.name.trim()) return oneLine(coach.name);
+        return u.email || '—';
+      }
+      listEl.innerHTML = sorted
+        .map(function (u) {
+          const roleLabel = u.role === 'admin' ? 'Admin' : u.role === 'coach' ? 'Coach' : u.role === 'swimmer' ? 'Swimmer' : u.role || '—';
+          let linkedId = u.swimmer_id != null ? u.swimmer_id : null;
+          if (u.role === 'swimmer' && linkedId == null && u.email) {
+            const match = swimmers.find(function (s) { return normEmail(s.email) === normEmail(u.email); });
+            if (match) linkedId = match.id;
+          }
+          const linkedSw = linkedId != null ? swimmers.find(function (s) { return s.id === linkedId; }) : null;
+          const linkedName = linkedSw ? oneLine(linkedSw.full_name || '') : '';
+          const coach = coaches.find(function (c) { return normEmail(c.email) === normEmail(u.email); });
+          const name = displayName(u, linkedSw, coach);
+          const searchText = (name + ' ' + (u.email || '') + ' ' + roleLabel + ' ' + linkedName).toLowerCase();
+          let linkHtml = '';
+          if (u.role === 'swimmer') {
+            const options = swimmers.map(function (s) {
+              const sel = s.id === linkedId ? ' selected' : '';
+              const optName = oneLine(s.full_name || '');
+              return '<option value="' + (s.id || '') + '"' + sel + '>' + (utils.escapeHtml(optName) + ' (ID ' + s.id + ')') + '</option>';
+            }).join('');
+            linkHtml =
+              '<select class="admin-user-link-select" data-user-id="' + u.id + '">' +
+              '<option value="">— No profile —</option>' + options +
+              '</select>' +
+              '<button type="button" class="btn btn-primary btn-sm admin-user-link-btn" data-user-id="' + u.id + '">Link</button>' +
+              '<button type="button" class="btn btn-secondary btn-sm admin-user-invite-btn" data-user-id="' + u.id + '" data-swimmer-id="' + (linkedId != null ? linkedId : '') + '">Get invite code</button>' +
+              '<span class="admin-user-invite-result hidden"></span>';
+          }
+          const metaParts = [roleLabel];
+          if (name !== (u.email || '')) metaParts.push(utils.escapeHtml(u.email));
+          if (linkedId != null) metaParts.push('ID\u00a0' + linkedId);
+          const metaLine = metaParts.join(' · ');
           return (
-            '<div class="admin-invite-row" data-swimmer-id="' + (s.id || '') + '">' +
-            '<span class="admin-invite-name">' + name + '</span> ' +
-            '<button type="button" class="btn btn-secondary btn-sm admin-invite-get-btn" data-swimmer-id="' + (s.id || '') + '">Get invite code</button>' +
-            '<span class="admin-invite-result hidden"></span>' +
+            '<div class="admin-user-row" data-user-id="' + u.id + '" data-search="' + utils.escapeHtml(searchText) + '">' +
+            '<div class="admin-user-row-info">' +
+            '<span class="admin-user-display-name">' + utils.escapeHtml(name) + '</span>' +
+            '<span class="admin-user-meta">' + metaLine + '</span>' +
+            '</div>' +
+            (linkHtml ? '<div class="admin-user-row-actions">' + linkHtml + '</div>' : '') +
             '</div>'
           );
         })
         .join('');
-      listEl.querySelectorAll('.admin-invite-get-btn').forEach(function (btn) {
+
+      listEl.querySelectorAll('.admin-user-link-btn').forEach(function (btn) {
         btn.addEventListener('click', async function () {
-          const swimmerId = parseInt(btn.getAttribute('data-swimmer-id'), 10);
-          const row = btn.closest('.admin-invite-row');
-          const resultEl = row ? row.querySelector('.admin-invite-result') : null;
-          if (!row || !resultEl) return;
+          const userId = btn.getAttribute('data-user-id');
+          const select = listEl.querySelector('.admin-user-link-select[data-user-id="' + userId + '"]');
+          const val = select ? select.value : '';
+          const swimmerId = val === '' ? null : parseInt(val, 10);
+          try {
+            const body = swimmerId != null ? JSON.stringify({ swimmer_id: swimmerId }) : JSON.stringify({ swimmer_id: null });
+            const resp = await fetch(`${baseUrl}/admin/users/${userId}/link-swimmer`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: body,
+            });
+            if (!resp.ok) throw new Error('Link failed');
+            await refreshUsersListPopup();
+          } catch (err) {
+            alert('Error: ' + (err.message || String(err)));
+          }
+        });
+      });
+
+      listEl.querySelectorAll('.admin-user-invite-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          const row = btn.closest('.admin-user-row');
+          const userId = row ? row.getAttribute('data-user-id') : null;
+          const select = listEl.querySelector('.admin-user-link-select[data-user-id="' + userId + '"]');
+          const val = select ? select.value : '';
+          let swimmerId = val !== '' ? parseInt(val, 10) : null;
+          if (swimmerId == null) {
+            const swimmerIdRaw = btn.getAttribute('data-swimmer-id');
+            swimmerId = swimmerIdRaw === '' ? null : parseInt(swimmerIdRaw, 10);
+          }
+          const resultEl = row ? row.querySelector('.admin-user-invite-result') : null;
+          if (swimmerId == null || !resultEl) {
+            alert('Select a swimmer profile in the dropdown first (or link the user to a profile).');
+            return;
+          }
           btn.disabled = true;
           btn.textContent = '…';
           try {
             const resp = await fetch(baseUrl + '/admin/invite-codes', {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + token,
-              },
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
               body: JSON.stringify({ swimmer_id: swimmerId }),
             });
             if (!resp.ok) throw new Error('Failed to create code');
@@ -351,108 +439,44 @@
         });
       });
     } catch (err) {
-      listEl.innerHTML = '<p class="text-muted">Could not load swimmers.</p>';
+      listEl.innerHTML = '<p class="text-muted">Could not load users: ' + (err.message || String(err)) + '</p>';
     }
   }
 
-  async function refreshAdminUsersList() {
-    const listEl = document.getElementById('admin-users-list');
-    if (!listEl) return;
-    const token = window.RelayApp.getAuthToken && window.RelayApp.getAuthToken();
-    const baseUrl = window.RELAY_AUTH_BASE_URL || api.AUTH_BASE_URL || 'http://127.0.0.1:8000';
-    if (!token) {
-      listEl.innerHTML = '<p class="text-muted">Sign in required to manage users.</p>';
-      return;
-    }
-    try {
-      const usersResp = await fetch(`${baseUrl}/admin/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!usersResp.ok) {
-        listEl.innerHTML = '<p class="text-muted">Could not load users.</p>';
-        return;
-      }
-      const users = await usersResp.json();
-      await api.ensureDbPath();
-      const swimmersData = await window.electronAPI.runBackend({ command: 'list-swimmers', dbPath: state.dbPath });
-      const swimmers = swimmersData.swimmers || [];
-      if (users.length === 0) {
-        listEl.innerHTML = '<p class="text-muted">No user accounts yet.</p>';
-        return;
-      }
-      listEl.innerHTML = users
-        .map(function (u) {
-          const roleLabel = u.role === 'admin' ? 'Admin' : u.role === 'coach' ? 'Coach' : u.role === 'swimmer' ? 'Swimmer' : u.role || '—';
-          let linkHtml = '';
-          if (u.role === 'swimmer') {
-            const options = swimmers.map(function (s) {
-              const sel = s.id === u.swimmer_id ? ' selected' : '';
-              return '<option value="' + (s.id || '') + '"' + sel + '>' + (utils.escapeHtml(s.full_name || '') + ' (ID ' + s.id + ')') + '</option>';
-            }).join('');
-            linkHtml =
-              '<div class="admin-user-link">' +
-              '<select class="admin-user-link-select" data-user-id="' + u.id + '">' +
-              '<option value="">— No profile —</option>' + options +
-              '</select>' +
-              '<button type="button" class="btn btn-primary btn-sm admin-user-link-btn" data-user-id="' + u.id + '">Link</button>' +
-              '</div>';
-          }
-          return (
-            '<div class="admin-user-row" data-user-id="' + u.id + '">' +
-            '<div class="admin-user-row-info">' +
-            '<span class="user-email">' + utils.escapeHtml(u.email) + '</span>' +
-            '<span class="user-role">' + roleLabel + (u.swimmer_id != null ? ' · Linked to swimmer ' + u.swimmer_id : '') + '</span>' +
-            '</div>' + linkHtml +
-            '</div>'
-          );
-        })
-        .join('');
-
-      listEl.querySelectorAll('.admin-user-link-btn').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
-          const userId = btn.getAttribute('data-user-id');
-          const select = listEl.querySelector('.admin-user-link-select[data-user-id="' + userId + '"]');
-          const val = select ? select.value : '';
-          const swimmerId = val === '' ? null : parseInt(val, 10);
-          try {
-            const body = swimmerId != null ? JSON.stringify({ swimmer_id: swimmerId }) : JSON.stringify({ swimmer_id: null });
-            const resp = await fetch(`${baseUrl}/admin/users/${userId}/link-swimmer`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-              },
-              body: body,
-            });
-            if (!resp.ok) throw new Error('Link failed');
-            await refreshAdminUsersList();
-          } catch (err) {
-            alert('Error: ' + (err.message || String(err)));
-          }
-        });
-      });
-    } catch (err) {
-      listEl.innerHTML = '<p class="text-muted">Could not load users: ' + (err.message || String(err)) + '</p>';
-    }
+  function filterUsersListPopup() {
+    const listEl = document.getElementById('admin-users-list-popup');
+    const searchEl = document.getElementById('admin-users-list-search');
+    if (!listEl || !searchEl) return;
+    const q = (searchEl.value || '').trim().toLowerCase();
+    listEl.querySelectorAll('.admin-user-row').forEach(function (row) {
+      const text = (row.getAttribute('data-search') || '');
+      row.style.display = !q || text.indexOf(q) !== -1 ? '' : 'none';
+    });
   }
 
   async function openAdminPanel() {
     if (adminOverlay) adminOverlay.classList.remove('hidden');
     await refreshMeetsList();
     await refreshTeamsList();
+    await refreshTeamCoachesList();
     await refreshRelayTypesList();
-    await refreshAdminUsersList();
     if (adminNewTeamInput) setTimeout(() => adminNewTeamInput.focus(), 100);
   }
 
-  async function openInviteSwimmersPopup() {
-    const overlay = document.getElementById('admin-invite-swimmers-modal-overlay');
+  async function openUsersListPopup() {
+    const overlay = document.getElementById('admin-users-list-modal-overlay');
+    const searchEl = document.getElementById('admin-users-list-search');
     if (overlay) overlay.classList.remove('hidden');
-    await refreshAdminInviteCodesList();
+    if (searchEl) searchEl.value = '';
+    await refreshUsersListPopup();
+    if (searchEl) {
+      searchEl.oninput = filterUsersListPopup;
+      searchEl.onkeyup = filterUsersListPopup;
+    }
   }
 
-  function closeInviteSwimmersPopup() {
-    const overlay = document.getElementById('admin-invite-swimmers-modal-overlay');
+  function closeUsersListPopup() {
+    const overlay = document.getElementById('admin-users-list-modal-overlay');
     if (overlay) overlay.classList.add('hidden');
   }
 
@@ -583,14 +607,14 @@
   if (adminInviteCoachBtn) adminInviteCoachBtn.addEventListener('click', function () { createRoleInviteCode('coach'); });
   if (adminInviteAdminBtn) adminInviteAdminBtn.addEventListener('click', function () { createRoleInviteCode('admin'); });
 
-  const adminOpenInviteSwimmersBtn = document.getElementById('admin-open-invite-swimmers-btn');
-  const adminInviteSwimmersModalClose = document.getElementById('admin-invite-swimmers-modal-close');
-  const adminInviteSwimmersModalOverlay = document.getElementById('admin-invite-swimmers-modal-overlay');
-  if (adminOpenInviteSwimmersBtn) adminOpenInviteSwimmersBtn.addEventListener('click', function () { openInviteSwimmersPopup(); });
-  if (adminInviteSwimmersModalClose) adminInviteSwimmersModalClose.addEventListener('click', closeInviteSwimmersPopup);
-  if (adminInviteSwimmersModalOverlay) {
-    adminInviteSwimmersModalOverlay.addEventListener('click', function (e) {
-      if (e.target === adminInviteSwimmersModalOverlay) closeInviteSwimmersPopup();
+  const adminOpenUsersListBtn = document.getElementById('admin-open-users-list-btn');
+  const adminUsersListModalClose = document.getElementById('admin-users-list-modal-close');
+  const adminUsersListModalOverlay = document.getElementById('admin-users-list-modal-overlay');
+  if (adminOpenUsersListBtn) adminOpenUsersListBtn.addEventListener('click', function () { openUsersListPopup(); });
+  if (adminUsersListModalClose) adminUsersListModalClose.addEventListener('click', closeUsersListPopup);
+  if (adminUsersListModalOverlay) {
+    adminUsersListModalOverlay.addEventListener('click', function (e) {
+      if (e.target === adminUsersListModalOverlay) closeUsersListPopup();
     });
   }
 
@@ -640,7 +664,7 @@
     refreshMeetsList,
     refreshTeamsList,
     refreshRelayTypesList,
-    refreshAdminUsersList,
+    refreshUsersListPopup,
     isAdminPanelOpen,
   };
 })();

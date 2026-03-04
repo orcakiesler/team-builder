@@ -185,11 +185,14 @@
       }
       const utils = window.RelayApp.utils;
       const esc = utils && utils.escapeHtml ? utils.escapeHtml : function (s) { return (s == null ? '' : String(s)); };
+      const teams = (data.teams || []);
+      const teamsText = teams.length ? teams.map(function (t) { return esc(t); }).join(', ') : 'None (ask an admin to assign you to a team)';
       coachProfileContent.innerHTML =
         '<div class="coach-profile-card">' +
         '<dl><dt>Name</dt><dd>' + esc(coach.name || '–') + '</dd>' +
         '<dt>Birth year</dt><dd>' + esc(coach.birth_year != null ? coach.birth_year : '–') + '</dd>' +
-        '<dt>Email</dt><dd>' + esc(coach.email || '–') + '</dd></dl></div>';
+        '<dt>Email</dt><dd>' + esc(coach.email || '–') + '</dd>' +
+        '<dt>Assigned teams</dt><dd>' + teamsText + '</dd></dl></div>';
     } catch (err) {
       coachProfileContent.innerHTML = '<p class="text-muted">Could not load profile: ' + (err.message || String(err)) + '</p><p class="text-muted">You can still click Edit to set your name and birth year.</p>';
       var stubCoach = { email: (state.currentUser && state.currentUser.email) || '', name: '', birth_year: null };
